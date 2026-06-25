@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Modal, Fld, Inp, Txa, Sel, Btn, ChipInput } from './ui';
+import { BugList } from './BugList';
 import { dbCreateTC } from '../lib/db';
 import { PRIORITIES, TC_TYPES } from '../lib/constants';
 
@@ -7,7 +8,7 @@ export default function CreateTCModal({ onClose, onCreated, addToast, previewId 
   const [f, setF] = useState({
     summary: '', priority: '', prerequisite: '', actions: '',
     expectedResults: '', actualResults: '', type: '',
-    jiraId: '', component: '', tags: [], bugDetails: '',
+    jiraId: '', component: '', tags: [], bugDetails: [],
   });
 
   const upd = k => e => setF(p => ({ ...p, [k]: e.target.value }));
@@ -69,7 +70,7 @@ export default function CreateTCModal({ onClose, onCreated, addToast, previewId 
         <ChipInput chips={f.tags} onChange={tags => setF(p => ({ ...p, tags }))} />
       </Fld>
       <Fld label="Bug Details">
-        <Txa value={f.bugDetails} onChange={upd('bugDetails')} placeholder="e.g. BUG-123 Login fails on mobile" rows={2} />
+        <BugList bugs={f.bugDetails} onSave={bugs => setF(p => ({ ...p, bugDetails: bugs }))} />
       </Fld>
     </Modal>
   );

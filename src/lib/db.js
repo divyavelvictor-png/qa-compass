@@ -24,7 +24,12 @@ const normTC = f => ({
   jira_id:          trim(f.jiraId || f.jira_id).toUpperCase().replace(/\s+/g, '') || '',
   component:        cap(f.component),
   tags:             (f.tags || []).map(t => trim(t)).filter(Boolean),
-  bug_details:      trim(f.bugDetails || f.bug_details || ''),
+  bug_details:      (() => {
+    const v = f.bugDetails ?? f.bug_details ?? [];
+    if (Array.isArray(v)) return v.map(b => trim(b.toString())).filter(Boolean);
+    const s = trim(v.toString());
+    return s ? [s] : [];
+  })(),
 });
 
 // Normalize a TP form before writing to DB
@@ -44,7 +49,10 @@ export const tcFromDb = r => ({
   expectedResults: r.expected_results || '', actualResults: r.actual_results || '',
   type: r.type || '', jiraId: r.jira_id || '',
   component: r.component || '', tags: r.tags || [],
-  bugDetails: r.bug_details || '',
+  // bug_details is TEXT[] in DB; handle legacy TEXT values gracefully
+  bugDetails: Array.isArray(r.bug_details)
+    ? r.bug_details
+    : (r.bug_details ? [r.bug_details] : []),
   createdAt: r.created_at,
 });
 
@@ -100,7 +108,10 @@ export async function dbBulkCreateTCs(rows) {
       type:            row['Test Case Type']       || row['test case type']       || '',
       jiraId:          row['JIRA ID (Optional)']   || row['JIRA ID']              || row['jira id']  || '',
       component:       row['Component']            || row['component']            || '',
-      bugDetails:      row['Bug Details (Optional)'] || row['Bug Details']        || row['bug details'] || '',
+      bugDetails:      (() => {
+        const v = row['Bug Details (Optional)'] || row['Bug Details'] || row['bug details'] || '';
+        return v ? [v.toString().trim()] : [];
+      })(),
       tags:            (row['Tags (Optional)'] || row['Tags'] || row['tags'] || '')
                          .toString().split(',').map(t => t.trim()).filter(Boolean),
     };
@@ -125,8 +136,9 @@ export async function dbUpdateTC(id, form) {
   if (error) throw error;
 }
 
-export async function dbUpdateTCBugDetails(id, bugDetails) {
-  const { error } = await supabase.from('test_cases').update({ bug_details: trim(bugDetails) }).eq('id', id);
+export async function dbUpdateTCBugs(id, bugs) {
+  const cleaned = (bugs || []).map(b => b.toString().trim()).filter(Boolean);
+  const { error } = await supabase.from('test_cases').update({ bug_details: cleaned }).eq('id', id);
   if (error) throw error;
 }
 

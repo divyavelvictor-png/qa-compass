@@ -2,9 +2,10 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import Papa from 'papaparse';
 import { PRIORITIES, TC_TYPES, PER_PAGE, PRIORITY_BADGE } from '../lib/constants';
-import { dbBulkCreateTCs, dbUpdateTCTags, dbDeleteTCs, dbUpdateTCBugDetails } from '../lib/db';
+import { dbBulkCreateTCs, dbUpdateTCTags, dbDeleteTCs, dbUpdateTCBugs } from '../lib/db';
 import { useTableState } from '../lib/useTableState';
 import { ResizableTh } from '../components/ResizableTh';
+import { BugList } from '../components/BugList';
 import { Btn, SH, Pagination } from '../components/ui';
 import CreateTCModal from '../components/CreateTCModal';
 import EditTCModal   from '../components/EditTCModal';
@@ -138,8 +139,8 @@ export default function TestCaseRepository({ testCases, testPlans = [], loadData
   };
 
   // Bug details save
-  const saveBug = async (id, val) => {
-    try { await dbUpdateTCBugDetails(id, val); loadData(); }
+  const saveBug = async (id, bugs) => {
+    try { await dbUpdateTCBugs(id, bugs); loadData(); }
     catch { addToast('Failed to save bug details.', 'error'); }
   };
 
@@ -253,7 +254,7 @@ export default function TestCaseRepository({ testCases, testPlans = [], loadData
           </div>
         </td>
       );
-      case 'bugDetails':     return <td key="bugDetails" className="px-3 py-2.5"><BugCell tc={tc} onSave={saveBug} /></td>;
+      case 'bugDetails':     return <td key="bugDetails" className="px-3 py-2.5"><BugList bugs={tc.bugDetails || []} onSave={bugs => saveBug(tc.id, bugs)} compact /></td>;
       default:               return <td key={col.k} />;
     }
   };

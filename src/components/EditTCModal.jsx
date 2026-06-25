@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Modal, Fld, Inp, Txa, Sel, Btn, ChipInput } from './ui';
+import { BugList } from './BugList';
 import { dbUpdateTC } from '../lib/db';
 import { PRIORITIES, TC_TYPES } from '../lib/constants';
 
@@ -15,7 +16,7 @@ export default function EditTCModal({ tc, onClose, onSaved, addToast }) {
     jiraId:          tc.jiraId          || '',
     component:       tc.component       || '',
     tags:            tc.tags            || [],
-    bugDetails:      tc.bugDetails      || '',
+    bugDetails:      Array.isArray(tc.bugDetails) ? tc.bugDetails : (tc.bugDetails ? [tc.bugDetails] : []),
   });
   const [saving, setSaving] = useState(false);
 
@@ -136,12 +137,7 @@ export default function EditTCModal({ tc, onClose, onSaved, addToast }) {
       </Fld>
 
       <Fld label="Bug Details">
-        <Txa
-          value={f.bugDetails}
-          onChange={upd('bugDetails')}
-          placeholder="e.g. BUG-123 Login fails on mobile"
-          rows={2}
-        />
+        <BugList bugs={f.bugDetails} onSave={bugs => setF(p => ({ ...p, bugDetails: bugs }))} />
       </Fld>
     </Modal>
   );

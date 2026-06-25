@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { PRIORITIES, TC_TYPES, PER_PAGE, PRIORITY_BADGE } from '../lib/constants';
-import { dbCreateTP, dbUpdateTP, dbUpdateTPIds, dbDeleteTPs, dbGetNextTPId } from '../lib/db';
+import { dbCreateTP, dbUpdateTP, dbUpdateTPIds, dbDeleteTPs, dbGetNextTPId, dbUpdateTCBugs } from '../lib/db';
 import { useTableState } from '../lib/useTableState';
 import { ResizableTh } from '../components/ResizableTh';
+import { BugList } from '../components/BugList';
 import { Btn, SH, Pagination, Modal, Fld, Inp, Txa, Sel, ChipInput } from '../components/ui';
 import CreateTCModal from '../components/CreateTCModal';
 import TCPickerModal  from '../components/TCPickerModal';
@@ -135,8 +136,14 @@ function TestPlanDetail({ plan, testCases, loadData, addToast, onBack, onEdit })
     { l: 'Priority',        w: '88px' }, { l: 'Pre-requisite',   w: '135px' },
     { l: 'Actions',         w: '135px'}, { l: 'Expected Results',w: '135px' },
     { l: 'Test Case Type',  w: '110px'}, { l: 'JIRA ID',         w: '88px'  },
-    { l: 'Components',      w: '110px'}, { l: 'Tags',            w: '165px' },
+    { l: 'Components',      w: '110px'}, { l: 'Tags',            w: '155px' },
+    { l: 'Bug Details',     w: '200px' },
   ];
+
+  const saveTCBugs = async (id, bugs) => {
+    try { await dbUpdateTCBugs(id, bugs); loadData(); }
+    catch { addToast('Failed to save bug details.', 'error'); }
+  };
 
   return (
     <div className="p-6 dark:text-slate-100">
@@ -249,23 +256,26 @@ function TestPlanDetail({ plan, testCases, loadData, addToast, onBack, onEdit })
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
               {paged.length === 0
-                ? <tr><td colSpan={11} className="text-center py-12 text-slate-400 text-sm">{linked.length === 0 ? 'No test cases linked yet' : 'No test cases match the current filters'}</td></tr>
+                ? <tr><td colSpan={12} className="text-center py-12 text-slate-400 text-sm">{linked.length === 0 ? 'No test cases linked yet' : 'No test cases match the current filters'}</td></tr>
                 : paged.map(tc => (
                   <tr key={tc.id} className={`hover:bg-slate-50 dark:hover:bg-slate-800/60 ${selectedIds.has(tc.id) ? 'bg-orange-50/60' : ''}`}>
                     <td className="px-3 py-2.5 text-center">
                       <Checkbox checked={selectedIds.has(tc.id)} onChange={() => toggleOne(tc.id)} />
                     </td>
-                    <td className="px-3 py-2.5 font-mono text-xs text-indigo-600 font-semibold">{tc.id}</td>
+                    <td className="px-3 py-2.5 font-mono text-xs text-indigo-600 dark:text-indigo-400 font-semibold">{tc.id}</td>
                     <td className="px-3 py-2.5 text-slate-800 dark:text-slate-100 text-xs truncate">{tc.summary}</td>
                     <td className="px-3 py-2.5">{tc.priority && <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${PRIORITY_BADGE[tc.priority] || 'bg-slate-100 text-slate-600'}`}>{tc.priority}</span>}</td>
                     <td className="px-3 py-2.5 text-slate-500 dark:text-slate-400 text-xs truncate">{tc.prerequisite}</td>
                     <td className="px-3 py-2.5 text-slate-500 dark:text-slate-400 text-xs truncate">{tc.actions}</td>
                     <td className="px-3 py-2.5 text-slate-500 dark:text-slate-400 text-xs truncate">{tc.expectedResults}</td>
-                    <td className="px-3 py-2.5">{tc.type && <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-xs">{tc.type}</span>}</td>
+                    <td className="px-3 py-2.5">{tc.type && <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded text-xs">{tc.type}</span>}</td>
                     <td className="px-3 py-2.5 text-slate-500 dark:text-slate-400 text-xs">{tc.jiraId}</td>
                     <td className="px-3 py-2.5 text-slate-500 dark:text-slate-400 text-xs">{tc.component}</td>
                     <td className="px-3 py-2.5">
-                      <div className="flex flex-wrap gap-1">{(tc.tags || []).map(t => <span key={t} className="px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded text-xs">{t}</span>)}</div>
+                      <div className="flex flex-wrap gap-1">{(tc.tags || []).map(t => <span key={t} className="px-1.5 py-0.5 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 rounded text-xs">{t}</span>)}</div>
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <BugList bugs={tc.bugDetails || []} onSave={bugs => saveTCBugs(tc.id, bugs)} compact />
                     </td>
                   </tr>
                 ))}
@@ -366,9 +376,20 @@ export default function TestPlan({ testCases, testPlans, loadData, addToast }) {
     { k: 'release',     l: 'Release',      w: '110px' },
     { k: 'component',   l: 'Component',    w: '120px', s: 'component' },
     { k: 'labels',      l: 'Labels',       w: '150px' },
-    { k: 'tcCount',     l: 'Test Cases',   w: '110px' },
+    { k: 'tcCount',     l: 'Test Cases',   w: '100px' },
+    { k: 'bugCount',    l: 'Bug Count',    w: '100px' },
   ];
   const { cols: tpCols, startResize: tpResize, drag: tpDrag, dragOver: tpDragOver } = useTableState('tplist', TP_LIST_COLS);
+
+  // Bug count per plan = sum of bug arrays of linked TCs
+  const tpBugCounts = useMemo(() => {
+    const counts = {};
+    testPlans.forEach(plan => {
+      const linkedTCs = testCases.filter(tc => (plan.testCaseIds || []).includes(tc.id));
+      counts[plan.id] = linkedTCs.reduce((sum, tc) => sum + (tc.bugDetails || []).length, 0);
+    });
+    return counts;
+  }, [testPlans, testCases]);
 
   useEffect(() => {
     clearTimeout(dbRef.current);
@@ -550,6 +571,13 @@ export default function TestPlan({ testCases, testPlans, loadData, addToast }) {
                         case 'component':   return <td key="component" className="px-3 py-2.5 text-slate-600 dark:text-slate-300 text-xs truncate">{p.component}</td>;
                         case 'labels':      return <td key="labels" className="px-3 py-2.5"><div className="flex flex-wrap gap-1">{(p.labels||[]).map(l => <span key={l} className="px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 rounded text-xs">{l}</span>)}</div></td>;
                         case 'tcCount':     return <td key="tcCount" className="px-3 py-2.5 text-center text-slate-600 dark:text-slate-300 text-xs font-medium">{(p.testCaseIds||[]).length}</td>;
+                        case 'bugCount':    return (
+                          <td key="bugCount" className="px-3 py-2.5 text-center">
+                            {tpBugCounts[p.id] > 0
+                              ? <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 text-xs font-bold">{tpBugCounts[p.id]}</span>
+                              : <span className="text-slate-300 dark:text-slate-600 text-xs">—</span>}
+                          </td>
+                        );
                         default:            return <td key={col.k} />;
                       }
                     })}

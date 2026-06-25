@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import { tpFromDb, dbGetExecForPlan, dbUpsertExec, dbGetAllExecGrouped } from '../lib/db';
-import { EXEC_STATUSES, STATUS_ROW, PER_PAGE } from '../lib/constants';
+import { tpFromDb, dbGetExecForPlan, dbUpsertExec, dbGetAllExecGrouped, dbUpdateTCBugs } from '../lib/db';
+import { EXEC_STATUSES, PER_PAGE } from '../lib/constants';
 import { useTheme } from '../lib/theme.jsx';
 import { Btn, Inp, Pagination } from '../components/ui';
+import { BugList } from '../components/BugList';
 
 // Inline styles — Tailwind bg-* unreliable on native <select> in Chrome/Windows
 const STATUS_SELECT_STYLE = {
@@ -16,18 +17,16 @@ const STATUS_SELECT_STYLE = {
 const LAST_PLAN_KEY = 'qa_last_exec_plan_id';
 
 // ── Exec Row ─────────────────────────────────────────────
-function ExecRow({ tc, exec, planId, onUpdate }) {
-  const [bugId,     setBugId]     = useState(exec.bugId     || '');
+function ExecRow({ tc, exec, planId, onUpdate, onUpdateBugs }) {
   const [assignee,  setAssignee]  = useState(exec.assignee  || '');
   const [createdOn, setCreatedOn] = useState(exec.createdOn || new Date().toISOString().split('T')[0]);
   const [tip, setTip] = useState(false);
   const fileRef = useRef(null);
 
   useEffect(() => {
-    setBugId(exec.bugId || '');
     setAssignee(exec.assignee || '');
     if (exec.createdOn) setCreatedOn(exec.createdOn);
-  }, [exec.bugId, exec.assignee, exec.createdOn]);
+  }, [exec.assignee, exec.createdOn]);
 
   const persist = async updates => {
     const base    = { tcId: tc.id, planId, createdOn, ...exec };
@@ -55,7 +54,7 @@ function ExecRow({ tc, exec, planId, onUpdate }) {
   };
 
   return (
-    <tr className={exec.status ? (STATUS_ROW[exec.status] || '') : ''}>
+    <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
       <td className="px-3 py-2.5 text-slate-800 dark:text-slate-100 text-xs font-medium truncate" title={tc.summary}>{tc.summary}</td>
       <td className="px-3 py-2.5 text-slate-500 dark:text-slate-400 text-xs truncate" title={tc.prerequisite}>{tc.prerequisite}</td>
       <td className="px-3 py-2.5 text-slate-500 dark:text-slate-400 text-xs truncate" title={tc.actions}>{tc.actions}</td>
@@ -63,21 +62,19 @@ function ExecRow({ tc, exec, planId, onUpdate }) {
       <td className="px-3 py-2.5">
         <select value={exec.status || ''} onChange={handleStatus}
           style={exec.status ? STATUS_SELECT_STYLE[exec.status] : {}}
-          className="w-full px-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none cursor-pointer font-medium bg-white text-slate-500">
+          className="w-full px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-600 rounded-lg focus:outline-none cursor-pointer font-medium bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400">
           <option value="">— Not Executed —</option>
           {EXEC_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
       </td>
       <td className="px-3 py-2.5">
-        <input value={bugId} onChange={e => setBugId(e.target.value)} onBlur={() => persist({ bugId })}
-          placeholder="BUG-XXX"
-          className="w-full px-2 py-1 text-xs border border-slate-200 dark:border-slate-600 rounded-lg focus:outline-none bg-transparent dark:bg-transparent dark:text-slate-100" />
+        <BugList bugs={tc.bugDetails || []} onSave={bugs => onUpdateBugs(tc.id, bugs)} compact />
       </td>
       <td className="px-3 py-2.5">
         <div className="space-y-0.5">
           {(exec.artifacts || []).map((a, i) => (
             <div key={i} className="relative">
-              <button className="text-xs text-indigo-600 hover:underline truncate max-w-full block" title={a.name}
+              <button className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline truncate max-w-full block" title={a.name}
                 onMouseEnter={() => setTip(i)} onMouseLeave={() => setTip(false)}>
                 📎 {a.name}
               </button>
@@ -88,7 +85,7 @@ function ExecRow({ tc, exec, planId, onUpdate }) {
               )}
             </div>
           ))}
-          <button onClick={() => fileRef.current?.click()} className="text-xs text-indigo-400 hover:text-indigo-700">+ Attach</button>
+          <button onClick={() => fileRef.current?.click()} className="text-xs text-indigo-400 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300">+ Attach</button>
           <input ref={fileRef} type="file"
             accept=".jpg,.jpeg,.png,.gif,.webp,.doc,.docx,.mp4,.mov,.avi,.zip,.tar,.gz"
             className="hidden" onChange={handleAttach} />
@@ -103,8 +100,8 @@ function ExecRow({ tc, exec, planId, onUpdate }) {
         <input type="date" value={createdOn} onChange={e => setCreatedOn(e.target.value)} onBlur={() => persist({ createdOn })}
           className="w-full px-2 py-1 text-xs border border-slate-200 dark:border-slate-600 rounded-lg focus:outline-none bg-transparent dark:bg-transparent dark:text-slate-100" />
       </td>
-      <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">
-        {exec.executedOn ? fmt(exec.executedOn) : <span className="text-slate-300">—</span>}
+      <td className="px-3 py-2.5 text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
+        {exec.executedOn ? fmt(exec.executedOn) : <span className="text-slate-300 dark:text-slate-600">—</span>}
       </td>
     </tr>
   );
@@ -210,8 +207,14 @@ export default function TestExecution({ testCases, testPlans, addToast }) {
 
   const loadPlan = () => loadPlanById(planIn);
 
-  const ECOLS = ['Test Summary','Pre-requisite','Actions','Expected Results','Status','Bug ID','Artifacts','Assignee','Created On','Executed On'];
-  const EW    = [185,135,135,135,125,105,155,115,110,130];
+  const ECOLS = ['Test Summary','Pre-requisite','Actions','Expected Results','Status','Bug Details','Artifacts','Assignee','Created On','Executed On'];
+  const EW    = [185,135,135,135,125,160,155,115,110,130];
+
+  // Updates bugs on the test case — syncs to test plan detail + repository
+  const updateTCBugs = useCallback(async (tcId, bugs) => {
+    try { await dbUpdateTCBugs(tcId, bugs); }
+    catch { addToast?.('Failed to update bug details.', 'error'); }
+  }, [addToast]);
 
   const statCards = dark ? [
     { label: 'Total Executed', value: stats.total,     bg: '#1e293b', text: '#e2e8f0' },
@@ -323,6 +326,7 @@ export default function TestExecution({ testCases, testPlans, addToast }) {
                           exec={execData[tc.id] || {}}
                           planId={plan.id}
                           onUpdate={(tcId, upd) => setExecData(p => ({ ...p, [tcId]: upd }))}
+                          onUpdateBugs={updateTCBugs}
                         />
                       ))}
                   </tbody>
