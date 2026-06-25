@@ -56,9 +56,9 @@ function ExecRow({ tc, exec, planId, onUpdate, onUpdateBugs }) {
   return (
     <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
       <td className="px-3 py-2.5 text-slate-800 dark:text-slate-100 text-xs font-medium truncate" title={tc.summary}>{tc.summary}</td>
-      <td className="px-3 py-2.5 text-slate-500 dark:text-slate-400 text-xs truncate" title={tc.prerequisite}>{tc.prerequisite}</td>
-      <td className="px-3 py-2.5 text-slate-500 dark:text-slate-400 text-xs truncate" title={tc.actions}>{tc.actions}</td>
-      <td className="px-3 py-2.5 text-slate-500 dark:text-slate-400 text-xs truncate" title={tc.expectedResults}>{tc.expectedResults}</td>
+      <td className="px-3 py-2.5 text-slate-800 dark:text-slate-100 text-xs truncate" title={tc.prerequisite}>{tc.prerequisite}</td>
+      <td className="px-3 py-2.5 text-slate-800 dark:text-slate-100 text-xs truncate" title={tc.actions}>{tc.actions}</td>
+      <td className="px-3 py-2.5 text-slate-800 dark:text-slate-100 text-xs truncate" title={tc.expectedResults}>{tc.expectedResults}</td>
       <td className="px-3 py-2.5">
         <select value={exec.status || ''} onChange={handleStatus}
           style={exec.status ? STATUS_SELECT_STYLE[exec.status] : {}}
@@ -384,10 +384,10 @@ export default function TestExecution({ testCases, testPlans, addToast }) {
                             {isActive && <span className="px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded text-xs font-medium">Active</span>}
                           </div>
                         </td>
-                        <td className="px-3 py-3 text-slate-700 dark:text-slate-200 text-xs truncate" title={ep.summary}>{ep.summary || <span className="text-slate-300">—</span>}</td>
-                        <td className="px-3 py-3 text-slate-500 dark:text-slate-400 text-xs truncate">{ep.sprint      || <span className="text-slate-300">—</span>}</td>
-                        <td className="px-3 py-3 text-slate-500 dark:text-slate-400 text-xs truncate">{ep.component   || <span className="text-slate-300">—</span>}</td>
-                        <td className="px-3 py-3 text-slate-500 dark:text-slate-400 text-xs truncate">{ep.fixVersions || <span className="text-slate-300">—</span>}</td>
+                        <td className="px-3 py-3 text-slate-800 dark:text-slate-100 text-xs truncate" title={ep.summary}>{ep.summary || <span className="text-slate-300">—</span>}</td>
+                        <td className="px-3 py-3 text-slate-800 dark:text-slate-100 text-xs truncate">{ep.sprint      || <span className="text-slate-300">—</span>}</td>
+                        <td className="px-3 py-3 text-slate-800 dark:text-slate-100 text-xs truncate">{ep.component   || <span className="text-slate-300">—</span>}</td>
+                        <td className="px-3 py-3 text-slate-800 dark:text-slate-100 text-xs truncate">{ep.fixVersions || <span className="text-slate-300">—</span>}</td>
                         <td className="px-3 py-3">
                           <span className="text-xs font-medium text-slate-700 dark:text-slate-200">
                             {ep.s.total}<span className="text-slate-400 dark:text-slate-400 font-normal"> / {ep.s.tcCount}</span>
@@ -397,7 +397,7 @@ export default function TestExecution({ testCases, testPlans, addToast }) {
                         <td className="px-3 py-3"><Pill value={ep.s.fail}      bg="#fee2e2" text="#991b1b" /></td>
                         <td className="px-3 py-3"><Pill value={ep.s.rerunPass} bg="#fef3c7" text="#92400e" /></td>
                         <td className="px-3 py-3"><Pill value={ep.s.rerunFail} bg="#fecaca" text="#991b1b" /></td>
-                        <td className="px-3 py-3 text-slate-500 dark:text-slate-400 text-xs whitespace-nowrap">{fmtDate(ep.s.lastExecuted)}</td>
+                        <td className="px-3 py-3 text-slate-800 dark:text-slate-100 text-xs whitespace-nowrap">{fmtDate(ep.s.lastExecuted)}</td>
                       </tr>
                     );
                   })}

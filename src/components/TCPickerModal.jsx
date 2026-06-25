@@ -210,7 +210,7 @@ export default function TCPickerModal({ testCases, alreadyLinked, onAdd, onClose
                     />
                   </td>
                   <td className="px-3 py-2.5 font-mono text-xs text-indigo-600 font-semibold">{tc.id}</td>
-                  <td className="px-3 py-2.5 text-slate-800 dark:text-slate-100 text-xs truncate" title={tc.summary}>{tc.summary}</td>
+                  <td className="px-3 py-2.5 text-slate-800 dark:text-slate-100 text-xs truncate font-medium" title={tc.summary}>{tc.summary}</td>
                   <td className="px-3 py-2.5">
                     {tc.priority && (
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${PRIORITY_BADGE[tc.priority] || 'bg-slate-100 text-slate-600'}`}>

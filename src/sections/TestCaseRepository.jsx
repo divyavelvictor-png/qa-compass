@@ -236,12 +236,12 @@ export default function TestCaseRepository({ testCases, testPlans = [], loadData
       case 'id':             return <td key="id" className="px-3 py-2.5 font-mono text-xs text-indigo-600 dark:text-indigo-400 font-semibold">{tc.id}</td>;
       case 'summary':        return <td key="summary" className="px-3 py-2.5"><button onClick={() => setEditingTc(tc)} className="text-slate-800 dark:text-slate-100 text-xs truncate text-left w-full hover:text-indigo-600 dark:hover:text-indigo-400 hover:underline underline-offset-2" title={tc.summary}>{tc.summary}</button></td>;
       case 'priority':       return <td key="priority" className="px-3 py-2.5">{tc.priority && <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${PRIORITY_BADGE[tc.priority] || 'bg-slate-100 text-slate-600'}`}>{tc.priority}</span>}</td>;
-      case 'prerequisite':   return <td key="prerequisite" className="px-3 py-2.5 text-slate-500 dark:text-slate-400 text-xs truncate" title={tc.prerequisite}>{tc.prerequisite}</td>;
-      case 'actions':        return <td key="actions" className="px-3 py-2.5 text-slate-500 dark:text-slate-400 text-xs truncate" title={tc.actions}>{tc.actions}</td>;
-      case 'expectedResults': return <td key="expectedResults" className="px-3 py-2.5 text-slate-500 dark:text-slate-400 text-xs truncate" title={tc.expectedResults}>{tc.expectedResults}</td>;
+      case 'prerequisite':   return <td key="prerequisite" className="px-3 py-2.5 text-slate-800 dark:text-slate-100 text-xs truncate" title={tc.prerequisite}>{tc.prerequisite}</td>;
+      case 'actions':        return <td key="actions" className="px-3 py-2.5 text-slate-800 dark:text-slate-100 text-xs truncate" title={tc.actions}>{tc.actions}</td>;
+      case 'expectedResults': return <td key="expectedResults" className="px-3 py-2.5 text-slate-800 dark:text-slate-100 text-xs truncate" title={tc.expectedResults}>{tc.expectedResults}</td>;
       case 'type':           return <td key="type" className="px-3 py-2.5">{tc.type && <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded text-xs">{tc.type}</span>}</td>;
-      case 'jiraId':         return <td key="jiraId" className="px-3 py-2.5 text-slate-500 dark:text-slate-400 text-xs truncate">{tc.jiraId}</td>;
-      case 'component':      return <td key="component" className="px-3 py-2.5 text-slate-500 dark:text-slate-400 text-xs truncate">{tc.component}</td>;
+      case 'jiraId':         return <td key="jiraId" className="px-3 py-2.5 text-slate-800 dark:text-slate-100 text-xs truncate">{tc.jiraId}</td>;
+      case 'component':      return <td key="component" className="px-3 py-2.5 text-slate-800 dark:text-slate-100 text-xs truncate">{tc.component}</td>;
       case 'tags':           return <td key="tags" className="px-3 py-2.5"><TagCell id={tc.id} tags={tc.tags || []} onSave={saveTags} /></td>;
       case 'linkedPlans':    return (
         <td key="linkedPlans" className="px-3 py-2.5">

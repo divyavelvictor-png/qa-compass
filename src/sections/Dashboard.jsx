@@ -165,7 +165,7 @@ export default function Dashboard({ testCases, testPlans, execRecords, lastRefre
               <span className="text-2xl">{c.icon}</span>
               <div>
                 <p className={`text-2xl font-bold ${c.c}`}>{c.v}</p>
-                <p className="text-xs text-slate-500 leading-tight mt-0.5">{c.l}</p>
+                <p className="text-xs text-slate-700 dark:text-slate-200 leading-tight mt-0.5">{c.l}</p>
               </div>
             </div>
           </div>
@@ -217,7 +217,7 @@ export default function Dashboard({ testCases, testPlans, execRecords, lastRefre
               <div key={s.label} style={{ backgroundColor: s.bg }}
                 className="flex-1 rounded-lg px-2 py-2 text-center">
                 <p style={{ color: s.text }} className="text-lg font-bold leading-none">{s.value}</p>
-                <p style={{ color: s.text }} className="text-xs mt-0.5 opacity-80">{s.label}</p>
+                <p style={{ color: s.text }} className="text-xs font-medium mt-0.5">{s.label}</p>
               </div>
             ))}
           </div>
@@ -279,7 +279,7 @@ export default function Dashboard({ testCases, testPlans, execRecords, lastRefre
                 <thead>
                   <tr className="border-b border-slate-100 dark:border-slate-700">
                     {['Plan', 'Summary', 'Bugs', 'Share'].map(h => (
-                      <th key={h} className="text-left py-2 px-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">{h}</th>
+                      <th key={h} className="text-left py-2 px-3 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wide">{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -289,7 +289,7 @@ export default function Dashboard({ testCases, testPlans, execRecords, lastRefre
                     const pct  = totalBugs ? Math.round((count / totalBugs) * 100) : 0;
                     return (
                       <tr key={planId} className="hover:bg-slate-50 dark:hover:bg-slate-800/60">
-                        <td className="py-2.5 px-3 font-mono text-xs text-indigo-600 font-semibold">{planId}</td>
+                        <td className="py-2.5 px-3 font-mono text-xs text-indigo-600 dark:text-indigo-400 font-semibold">{planId}</td>
                         <td className="py-2.5 px-3 text-slate-600 dark:text-slate-300 text-xs truncate max-w-xs">{plan?.summary || '—'}</td>
                         <td className="py-2.5 px-3 text-sm font-bold text-slate-800">{count}</td>
                         <td className="py-2.5 px-3 w-56">

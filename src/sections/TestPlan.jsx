@@ -164,11 +164,11 @@ function TestPlanDetail({ plan, testCases, loadData, addToast, onBack, onEdit })
         <h2 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">Plan Details</h2>
         <div className="flex flex-wrap gap-6">
           {[['Sprint', plan.sprint], ['Fix Versions', plan.fixVersions], ['Release', plan.release], ['Component', plan.component]].map(([k, v]) => v && (
-            <div key={k}><p className="text-xs text-slate-500">{k}</p><p className="text-sm font-semibold text-slate-800 mt-0.5">{v}</p></div>
+            <div key={k}><p className="text-xs font-medium text-slate-800 dark:text-slate-100">{k}</p><p className="text-sm font-semibold text-slate-800 dark:text-slate-100 mt-0.5">{v}</p></div>
           ))}
           {(plan.labels || []).length > 0 && (
             <div>
-              <p className="text-xs text-slate-500">Labels</p>
+              <p className="text-xs font-medium text-slate-800 dark:text-slate-100">Labels</p>
               <div className="flex flex-wrap gap-1 mt-0.5">
                 {plan.labels.map(l => <span key={l} className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-xs">{l}</span>)}
               </div>
@@ -265,12 +265,12 @@ function TestPlanDetail({ plan, testCases, loadData, addToast, onBack, onEdit })
                     <td className="px-3 py-2.5 font-mono text-xs text-indigo-600 dark:text-indigo-400 font-semibold">{tc.id}</td>
                     <td className="px-3 py-2.5 text-slate-800 dark:text-slate-100 text-xs truncate">{tc.summary}</td>
                     <td className="px-3 py-2.5">{tc.priority && <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${PRIORITY_BADGE[tc.priority] || 'bg-slate-100 text-slate-600'}`}>{tc.priority}</span>}</td>
-                    <td className="px-3 py-2.5 text-slate-500 dark:text-slate-400 text-xs truncate">{tc.prerequisite}</td>
-                    <td className="px-3 py-2.5 text-slate-500 dark:text-slate-400 text-xs truncate">{tc.actions}</td>
-                    <td className="px-3 py-2.5 text-slate-500 dark:text-slate-400 text-xs truncate">{tc.expectedResults}</td>
+                    <td className="px-3 py-2.5 text-slate-800 dark:text-slate-100 text-xs truncate">{tc.prerequisite}</td>
+                    <td className="px-3 py-2.5 text-slate-800 dark:text-slate-100 text-xs truncate">{tc.actions}</td>
+                    <td className="px-3 py-2.5 text-slate-800 dark:text-slate-100 text-xs truncate">{tc.expectedResults}</td>
                     <td className="px-3 py-2.5">{tc.type && <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded text-xs">{tc.type}</span>}</td>
-                    <td className="px-3 py-2.5 text-slate-500 dark:text-slate-400 text-xs">{tc.jiraId}</td>
-                    <td className="px-3 py-2.5 text-slate-500 dark:text-slate-400 text-xs">{tc.component}</td>
+                    <td className="px-3 py-2.5 text-slate-800 dark:text-slate-100 text-xs">{tc.jiraId}</td>
+                    <td className="px-3 py-2.5 text-slate-800 dark:text-slate-100 text-xs">{tc.component}</td>
                     <td className="px-3 py-2.5">
                       <div className="flex flex-wrap gap-1">{(tc.tags || []).map(t => <span key={t} className="px-1.5 py-0.5 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 rounded text-xs">{t}</span>)}</div>
                     </td>
@@ -565,12 +565,12 @@ export default function TestPlan({ testCases, testPlans, loadData, addToast }) {
                       switch (col.k) {
                         case 'id':          return <td key="id" className="px-3 py-2.5"><div className="flex items-center gap-1.5 group"><button onClick={() => { setSel(p); setView('detail'); }} className="font-mono text-xs text-indigo-600 dark:text-indigo-400 font-semibold hover:underline">{p.id}</button><button onClick={(e) => { e.stopPropagation(); setEditingPlan(p); }} className="opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 text-xs" title="Edit plan">✏️</button></div></td>;
                         case 'summary':     return <td key="summary" className="px-3 py-2.5"><button onClick={() => { setSel(p); setView('detail'); }} className="text-slate-800 dark:text-slate-100 text-xs truncate text-left w-full hover:text-indigo-600 dark:hover:text-indigo-400">{p.summary || '—'}</button></td>;
-                        case 'sprint':      return <td key="sprint" className="px-3 py-2.5 text-slate-600 dark:text-slate-300 text-xs">{p.sprint}</td>;
-                        case 'fixVersions': return <td key="fixVersions" className="px-3 py-2.5 text-slate-600 dark:text-slate-300 text-xs truncate">{p.fixVersions}</td>;
-                        case 'release':     return <td key="release" className="px-3 py-2.5 text-slate-600 dark:text-slate-300 text-xs truncate">{p.release}</td>;
-                        case 'component':   return <td key="component" className="px-3 py-2.5 text-slate-600 dark:text-slate-300 text-xs truncate">{p.component}</td>;
+                        case 'sprint':      return <td key="sprint" className="px-3 py-2.5 text-slate-800 dark:text-slate-100 text-xs">{p.sprint}</td>;
+                        case 'fixVersions': return <td key="fixVersions" className="px-3 py-2.5 text-slate-800 dark:text-slate-100 text-xs truncate">{p.fixVersions}</td>;
+                        case 'release':     return <td key="release" className="px-3 py-2.5 text-slate-800 dark:text-slate-100 text-xs truncate">{p.release}</td>;
+                        case 'component':   return <td key="component" className="px-3 py-2.5 text-slate-800 dark:text-slate-100 text-xs truncate">{p.component}</td>;
                         case 'labels':      return <td key="labels" className="px-3 py-2.5"><div className="flex flex-wrap gap-1">{(p.labels||[]).map(l => <span key={l} className="px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 rounded text-xs">{l}</span>)}</div></td>;
-                        case 'tcCount':     return <td key="tcCount" className="px-3 py-2.5 text-center text-slate-600 dark:text-slate-300 text-xs font-medium">{(p.testCaseIds||[]).length}</td>;
+                        case 'tcCount':     return <td key="tcCount" className="px-3 py-2.5 text-center text-slate-800 dark:text-slate-100 text-xs font-medium">{(p.testCaseIds||[]).length}</td>;
                         case 'bugCount':    return (
                           <td key="bugCount" className="px-3 py-2.5 text-center">
                             {tpBugCounts[p.id] > 0
