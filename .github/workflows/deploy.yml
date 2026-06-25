@@ -33,6 +33,9 @@ jobs:
 
       # 4. Build the app
       #    Supabase credentials come from GitHub Secrets (never in source code)
+      - name: Fix permissions
+        run: chmod +x node_modules/.bin/*
+
       - name: Build
         run: npm run build
         env:
