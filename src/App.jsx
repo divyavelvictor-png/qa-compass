@@ -7,7 +7,33 @@ import TestCaseRepository from './sections/TestCaseRepository';
 import TestPlan           from './sections/TestPlan';
 import TestExecution      from './sections/TestExecution';
 import Dashboard          from './sections/Dashboard';
+import Settings           from './sections/Settings';
 import SetupScreen        from './SetupScreen';
+
+// Professional compass icon — always visible in both expanded and collapsed sidebar
+function AppIcon({ size = 34 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      {/* Background */}
+      <circle cx="18" cy="18" r="17" fill="#4f46e5"/>
+      <circle cx="18" cy="18" r="17" fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth="1"/>
+      {/* Inner ring */}
+      <circle cx="18" cy="18" r="11.5" fill="none" stroke="rgba(255,255,255,0.13)" strokeWidth="0.8"/>
+      {/* Cardinal ticks */}
+      <line x1="18" y1="2.5" x2="18" y2="6.5"  stroke="rgba(255,255,255,0.7)" strokeWidth="1.5" strokeLinecap="round"/>
+      <line x1="18" y1="29.5" x2="18" y2="33.5" stroke="rgba(255,255,255,0.25)" strokeWidth="1"   strokeLinecap="round"/>
+      <line x1="2.5" y1="18" x2="6.5" y2="18"   stroke="rgba(255,255,255,0.25)" strokeWidth="1"   strokeLinecap="round"/>
+      <line x1="29.5" y1="18" x2="33.5" y2="18" stroke="rgba(255,255,255,0.25)" strokeWidth="1"   strokeLinecap="round"/>
+      {/* North needle — white */}
+      <path d="M18 7.5 L15.5 18 L18 16.5 L20.5 18 Z" fill="white"/>
+      {/* South needle — dim */}
+      <path d="M18 28.5 L20.5 18 L18 19.5 L15.5 18 Z" fill="rgba(255,255,255,0.32)"/>
+      {/* Centre jewel */}
+      <circle cx="18" cy="18" r="2.8" fill="white"/>
+      <circle cx="18" cy="18" r="1.6" fill="#4f46e5"/>
+    </svg>
+  );
+}
 
 let _toastId = 0;
 
@@ -16,6 +42,7 @@ const NAV = [
   { id: 'testplan',   label: 'Test Plan',             icon: '📁' },
   { id: 'execution',  label: 'Test Execution',         icon: '▶️' },
   { id: 'dashboard',  label: 'Dashboard',              icon: '📊' },
+  { id: 'settings',   label: 'Settings',               icon: '⚙️' },
 ];
 
 function ConfigGate({ children }) {
@@ -23,7 +50,7 @@ function ConfigGate({ children }) {
 }
 
 function AppShell() {
-  const { dark, toggle, fontSize, setFontSize } = useTheme();
+  const { dark } = useTheme();
   const [section, setSection]     = useState('repository');
   const [collapsed, setCollapsed] = useState(false);
   const [toasts, setToasts]       = useState([]);
@@ -92,14 +119,23 @@ function AppShell() {
         className="fixed left-0 top-0 h-full bg-slate-900 z-40 flex flex-col shadow-2xl shrink-0">
 
         {/* Logo + collapse */}
-        <div className="flex items-center h-16 border-b border-white/[0.08] shrink-0"
-          style={{ padding: collapsed ? '0 8px' : '0 16px', gap: 12 }}>
+        <div className={`border-b border-white/[0.08] shrink-0 ${
+          collapsed
+            ? 'flex flex-col items-center pt-3 pb-2 gap-2 px-2'
+            : 'flex items-center h-16 px-4 gap-3'
+        }`}>
+          {/* Icon — always visible */}
+          <AppIcon size={collapsed ? 30 : 34} />
+
+          {/* Name — only when expanded */}
           {!collapsed && (
             <div className="flex-1 min-w-0">
               <p className="text-white font-bold text-sm tracking-wide truncate">QA Compass</p>
               <p className="text-slate-500 text-xs">Supabase · Live</p>
             </div>
           )}
+
+          {/* Collapse toggle */}
           <button onClick={() => setCollapsed(c => !c)}
             aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
@@ -125,51 +161,10 @@ function AppShell() {
           ))}
         </nav>
 
-        {/* Footer: font size + theme toggle + status */}
-        <div className="border-t border-white/[0.08] shrink-0 px-3 py-3 space-y-2">
-          {/* Font size controls */}
-          {!collapsed && (
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-500 shrink-0">Text</span>
-              <div className="flex items-center gap-0.5 bg-slate-800 rounded-lg p-0.5 flex-1">
-                {Object.entries(FONT_SIZES).map(([key, { label }]) => (
-                  <button key={key} onClick={() => setFontSize(key)}
-                    aria-label={`${label} font size`}
-                    title={label}
-                    className={`flex-1 py-0.5 rounded text-center transition-colors focus-visible:ring-1 focus-visible:ring-indigo-400
-                      ${key === 'sm' ? 'text-xs' : key === 'md' ? 'text-sm' : 'text-base'}
-                      ${fontSize === key
-                        ? 'bg-indigo-600 text-white font-semibold'
-                        : 'text-slate-400 hover:text-white'}`}>
-                    A
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-          {collapsed && (
-            <div className="flex flex-col items-center gap-0.5">
-              {Object.entries(FONT_SIZES).map(([key, { label }]) => (
-                <button key={key} onClick={() => setFontSize(key)}
-                  aria-label={`${label} font size`} title={label}
-                  className={`w-full text-center rounded py-0.5 transition-colors
-                    ${key === 'sm' ? 'text-xs' : key === 'md' ? 'text-sm' : 'text-base'}
-                    ${fontSize === key ? 'text-indigo-400 font-bold' : 'text-slate-500 hover:text-slate-300'}`}>
-                  A
-                </button>
-              ))}
-            </div>
-          )}
-          {/* Dark mode toggle */}
-          <div className="flex items-center gap-2">
-            <button onClick={toggle}
-              aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
-              title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
-              className="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-700/50 text-base focus-visible:ring-2 focus-visible:ring-indigo-400 shrink-0">
-              {dark ? '☀️' : '🌙'}
-            </button>
-            {!collapsed && <p className="text-xs text-slate-600 truncate">Real-time sync enabled</p>}
-          </div>
+        {/* Footer — status only */}
+        <div className="border-t border-white/[0.08] shrink-0 px-4 py-3 flex items-center gap-2">
+          <span className="w-2 h-2 bg-green-500 rounded-full shrink-0" />
+          {!collapsed && <p className="text-xs text-slate-500 truncate">Real-time sync enabled</p>}
         </div>
       </aside>
 
@@ -187,6 +182,7 @@ function AppShell() {
             {section === 'testplan'   && <TestPlan testCases={testCases} testPlans={testPlans} loadData={loadData} addToast={addToast} />}
             {section === 'execution'  && <TestExecution testCases={testCases} testPlans={testPlans} addToast={addToast} />}
             {section === 'dashboard'  && <Dashboard testCases={testCases} testPlans={testPlans} execRecords={execRecords} lastRefreshed={lastRefreshed} />}
+            {section === 'settings'   && <Settings />}
           </>
         )}
       </main>
