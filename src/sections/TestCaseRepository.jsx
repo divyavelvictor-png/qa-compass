@@ -2,47 +2,59 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import Papa from 'papaparse';
 import { PRIORITIES, TC_TYPES, PER_PAGE, PRIORITY_BADGE } from '../lib/constants';
-import { dbBulkCreateTCs, dbUpdateTCTags, dbDeleteTCs } from '../lib/db';
+import { dbBulkCreateTCs, dbUpdateTCTags, dbDeleteTCs, dbUpdateTCBugDetails } from '../lib/db';
+import { useTableState } from '../lib/useTableState';
+import { ResizableTh } from '../components/ResizableTh';
 import { Btn, SH, Pagination } from '../components/ui';
 import CreateTCModal from '../components/CreateTCModal';
 import EditTCModal   from '../components/EditTCModal';
 import TagCell from '../components/TagCell';
 
-// Handles the native indeterminate state that React cannot set as a prop
+// Indeterminate checkbox
 function Checkbox({ checked, indeterminate, onChange, className = '' }) {
   const ref = useRef(null);
-  useEffect(() => {
-    if (ref.current) ref.current.indeterminate = !checked && !!indeterminate;
-  }, [checked, indeterminate]);
+  useEffect(() => { if (ref.current) ref.current.indeterminate = !checked && !!indeterminate; }, [checked, indeterminate]);
   return (
-    <input
-      ref={ref}
-      type="checkbox"
-      checked={checked}
-      onChange={onChange}
-      className={`w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer accent-indigo-600 ${className}`}
+    <input ref={ref} type="checkbox" checked={checked} onChange={onChange}
+      className={`w-4 h-4 rounded border-slate-300 accent-indigo-600 cursor-pointer ${className}`} />
+  );
+}
+
+// Inline bug details cell
+function BugCell({ tc, onSave }) {
+  const [val, setVal] = useState(tc.bugDetails || '');
+  useEffect(() => setVal(tc.bugDetails || ''), [tc.bugDetails]);
+  return (
+    <input value={val}
+      onChange={e => setVal(e.target.value)}
+      onBlur={() => { if (val !== (tc.bugDetails || '')) onSave(tc.id, val); }}
+      placeholder="Add bug info…"
+      className="w-full text-xs bg-transparent outline-none border-b border-transparent hover:border-slate-300 dark:hover:border-slate-600 focus:border-indigo-400 dark:text-slate-200 dark:placeholder:text-slate-600 py-0.5 transition-colors"
     />
   );
 }
 
-const COLS = [
-  { l: 'Test ID',          k: 'id',             w: '95px',  s: 'id' },
-  { l: 'Test Summary',     k: 'summary',         w: '200px' },
-  { l: 'Priority',         k: 'priority',        w: '88px',  s: 'priority' },
-  { l: 'Pre-requisite',    k: 'prerequisite',    w: '135px' },
-  { l: 'Actions',          k: 'actions',         w: '135px' },
-  { l: 'Expected Results', k: 'expectedResults', w: '135px' },
-  { l: 'Test Case Type',   k: 'type',            w: '110px', s: 'type' },
-  { l: 'JIRA ID',          k: 'jiraId',          w: '88px' },
-  { l: 'Components',       k: 'component',       w: '110px', s: 'component' },
-  { l: 'Tags',             k: 'tags',            w: '165px' },
+const INIT_COLS = [
+  { l: 'Test ID',           k: 'id',             w: '95px',  s: 'id' },
+  { l: 'Test Summary',      k: 'summary',         w: '200px' },
+  { l: 'Priority',          k: 'priority',        w: '88px',  s: 'priority' },
+  { l: 'Pre-requisite',     k: 'prerequisite',    w: '130px' },
+  { l: 'Actions',           k: 'actions',         w: '130px' },
+  { l: 'Expected Results',  k: 'expectedResults', w: '130px' },
+  { l: 'Test Case Type',    k: 'type',            w: '110px', s: 'type' },
+  { l: 'JIRA ID',           k: 'jiraId',          w: '90px' },
+  { l: 'Component',         k: 'component',       w: '110px', s: 'component' },
+  { l: 'Tags',              k: 'tags',            w: '155px' },
+  { l: 'Linked Plans',      k: 'linkedPlans',     w: '145px' },
+  { l: 'Bug Details',       k: 'bugDetails',      w: '165px' },
 ];
 
-export default function TestCaseRepository({ testCases, loadData, addToast }) {
+export default function TestCaseRepository({ testCases, testPlans = [], loadData, addToast }) {
   const [search, setSearch]   = useState('');
   const [ds, setDs]           = useState('');
   const [fC, setFC] = useState(''); const [fT, setFT] = useState('');
   const [fG, setFG] = useState(''); const [fP, setFP] = useState('');
+  const [fPlan, setFPlan]     = useState('');
   const [sortCol, setSortCol] = useState('id');
   const [sortDir, setSortDir] = useState('asc');
   const [page, setPage]       = useState(1);
@@ -51,8 +63,12 @@ export default function TestCaseRepository({ testCases, loadData, addToast }) {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [showConfirm, setShowConfirm] = useState(false);
   const [deleting, setDeleting]       = useState(false);
+  const [uploadState, setUploadState] = useState(null); // null | { phase, count? }
   const fileRef = useRef(null);
   const dbRef   = useRef(null);
+
+  // Column resize + reorder state
+  const { cols, startResize, drag, dragOver } = useTableState('tcrepo', INIT_COLS);
 
   useEffect(() => {
     clearTimeout(dbRef.current);
@@ -60,10 +76,23 @@ export default function TestCaseRepository({ testCases, loadData, addToast }) {
     return () => clearTimeout(dbRef.current);
   }, [search]);
 
-  useEffect(() => { setPage(1); setSelectedIds(new Set()); }, [ds, fC, fT, fG, fP]);
+  useEffect(() => { setPage(1); setSelectedIds(new Set()); }, [ds, fC, fT, fG, fP, fPlan]);
+
+  // Map: TC ID → array of plan IDs that include it
+  const tcPlanMap = useMemo(() => {
+    const map = {};
+    testPlans.forEach(plan => {
+      (plan.testCaseIds || []).forEach(id => {
+        if (!map[id]) map[id] = [];
+        map[id].push(plan.id);
+      });
+    });
+    return map;
+  }, [testPlans]);
 
   const comps   = useMemo(() => [...new Set(testCases.map(t => t.component).filter(Boolean))].sort(), [testCases]);
   const allTags = useMemo(() => [...new Set(testCases.flatMap(t => t.tags || []))].sort(), [testCases]);
+  const planIds = useMemo(() => [...new Set(testPlans.map(p => p.id))].sort(), [testPlans]);
 
   const filtered = useMemo(() => {
     let d = [...testCases];
@@ -72,263 +101,178 @@ export default function TestCaseRepository({ testCases, loadData, addToast }) {
       d = d.filter(t =>
         (t.id || '').toLowerCase().includes(q) ||
         (t.summary || '').toLowerCase().includes(q) ||
-        (t.jiraId || '').toLowerCase().includes(q)
+        (t.jiraId || '').toLowerCase().includes(q) ||
+        (tcPlanMap[t.id] || []).some(pId => pId.toLowerCase().includes(q))
       );
     }
-    if (fC) d = d.filter(t => t.component === fC);
-    if (fT) d = d.filter(t => t.type === fT);
-    if (fG) d = d.filter(t => (t.tags || []).includes(fG));
-    if (fP) d = d.filter(t => t.priority === fP);
+    if (fC)    d = d.filter(t => t.component === fC);
+    if (fT)    d = d.filter(t => t.type === fT);
+    if (fG)    d = d.filter(t => (t.tags || []).includes(fG));
+    if (fP)    d = d.filter(t => t.priority === fP);
+    if (fPlan) d = d.filter(t => (tcPlanMap[t.id] || []).includes(fPlan));
     d.sort((a, b) => {
       const dir = sortDir === 'asc' ? 1 : -1;
-      return (a[sortCol] || '') < (b[sortCol] || '') ? -dir
-           : (a[sortCol] || '') > (b[sortCol] || '') ?  dir : 0;
+      return (a[sortCol] || '') < (b[sortCol] || '') ? -dir : (a[sortCol] || '') > (b[sortCol] || '') ? dir : 0;
     });
     return d;
-  }, [testCases, ds, fC, fT, fG, fP, sortCol, sortDir]);
+  }, [testCases, ds, fC, fT, fG, fP, fPlan, sortCol, sortDir, tcPlanMap]);
 
-  const paged = useMemo(
-    () => filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE),
-    [filtered, page]
-  );
+  const paged = useMemo(() => filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE), [filtered, page]);
+  const sort  = col => { setSortDir(d => sortCol === col ? (d === 'asc' ? 'desc' : 'asc') : 'asc'); setSortCol(col); };
 
-  const sort = col => {
-    setSortDir(d => sortCol === col ? (d === 'asc' ? 'desc' : 'asc') : 'asc');
-    setSortCol(col);
-  };
-
-  // ── Selection ──────────────────────────────────────────
+  // Selection
   const allFilteredSelected = filtered.length > 0 && filtered.every(t => selectedIds.has(t.id));
   const someSelected        = selectedIds.size > 0 && !allFilteredSelected;
+  const toggleOne = id => setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const toggleAll = () => setSelectedIds(allFilteredSelected ? new Set() : new Set(filtered.map(t => t.id)));
 
-  const toggleOne = id =>
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-
-  const toggleAll = () =>
-    setSelectedIds(allFilteredSelected ? new Set() : new Set(filtered.map(t => t.id)));
-
-  // ── Delete ─────────────────────────────────────────────
+  // Delete
   const confirmDelete = async () => {
     setDeleting(true);
     try {
-      const ids = [...selectedIds];
-      await dbDeleteTCs(ids);
-      addToast(`${ids.length} test case${ids.length !== 1 ? 's' : ''} deleted`, 'success');
-      setSelectedIds(new Set());
-      setShowConfirm(false);
-      loadData();
-    } catch {
-      addToast('Failed to delete. Please try again.', 'error');
-    }
+      await dbDeleteTCs([...selectedIds]);
+      addToast(`${selectedIds.size} test case${selectedIds.size !== 1 ? 's' : ''} deleted`, 'success');
+      setSelectedIds(new Set()); setShowConfirm(false); loadData();
+    } catch { addToast('Failed to delete. Please try again.', 'error'); }
     setDeleting(false);
   };
 
-  // ── Template download ───────────────────────────────────
+  // Bug details save
+  const saveBug = async (id, val) => {
+    try { await dbUpdateTCBugDetails(id, val); loadData(); }
+    catch { addToast('Failed to save bug details.', 'error'); }
+  };
+
+  // Template download
   const dlTemplate = () => {
     const headers = [
       'Test Summary', 'Priority', 'Pre-Requisite', 'Actions',
-      'Expected Results', 'Test Case Type', 'JIRA ID (Optional)', 'Component', 'Tags (Optional)',
+      'Expected Results', 'Test Case Type', 'JIRA ID (Optional)', 'Component',
+      'Tags (Optional)', 'Bug Details (Optional)',
     ];
     const hints = [
-      'Enter the test case description',
-      'High | Medium | Low',
-      'Conditions that must be met before execution',
-      'Step-by-step actions to execute the test',
-      'Expected outcome after executing the actions',
-      'UI | Functional | Accessibility',
-      'Optional — e.g. PROJ-123',
-      'e.g. Login, Checkout',
+      'Enter the test case description', 'High | Medium | Low',
+      'Conditions that must be met before execution', 'Step-by-step actions to execute the test',
+      'Expected outcome after executing the actions', 'UI | Functional | Accessibility',
+      'Optional — e.g. PROJ-123', 'e.g. Login, Checkout',
       'Optional — comma-separated e.g. smoke, regression',
+      'Optional — e.g. BUG-123 Login fails on mobile',
     ];
     const ws = XLSX.utils.aoa_to_sheet([headers, hints]);
-    ws['!cols'] = [
-      { wch: 42 }, { wch: 22 }, { wch: 32 }, { wch: 32 }, { wch: 32 },
-      { wch: 24 }, { wch: 14 }, { wch: 20 }, { wch: 28 },
-    ];
-    ws['!rows'] = [{ hpt: 22 }, { hpt: 18 }];
+    ws['!cols'] = [{ wch:42 },{ wch:22 },{ wch:32 },{ wch:32 },{ wch:32 },{ wch:24 },{ wch:14 },{ wch:20 },{ wch:28 },{ wch:32 }];
+    ws['!rows'] = [{ hpt:22 },{ hpt:18 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Test Case Template');
     XLSX.writeFile(wb, 'test_case_template.xlsx');
   };
 
-  // ── Upload ──────────────────────────────────────────────
+  // Upload
   const handleUpload = e => {
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = '';
+    setUploadState({ phase: 'reading' });
 
     const proc = async rows => {
-      // 1. File produced no rows (empty sheet / empty CSV)
-      if (!rows?.length) {
-        addToast('The file is empty. Fill in the template and try again.', 'error');
-        return;
-      }
-
-      // 2. "Test Summary" column is missing entirely
+      if (!rows?.length) { setUploadState(null); addToast('The file is empty. Fill in the template and try again.', 'error'); return; }
       const sample = rows[0];
-      const hasSummaryCol = Object.keys(sample).some(
-        k => k.toLowerCase().trim() === 'test summary'
-      );
-      if (!hasSummaryCol) {
-        addToast(
-          'Column "Test Summary" not found. Use the ⬇ Template button to download the correct format.',
-          'error'
-        );
-        return;
-      }
-
-      // 3. Rows exist but every Test Summary cell is blank
-      const valid   = rows.filter(r => (r['Test Summary'] || r['test summary'])?.toString().trim());
+      const hasSummaryCol = Object.keys(sample).some(k => k.toLowerCase().trim() === 'test summary');
+      if (!hasSummaryCol) { setUploadState(null); addToast('Column "Test Summary" not found. Use the ⬇ Template button.', 'error'); return; }
+      const valid = rows.filter(r => (r['Test Summary'] || r['test summary'])?.toString().trim());
       const skipped = rows.length - valid.length;
-
-      if (!valid.length) {
-        addToast(
-          `No data to import — all ${rows.length} row${rows.length !== 1 ? 's' : ''} are missing a Test Summary value.`,
-          'error'
-        );
-        return;
-      }
-
-      // 4. Detect invalid Priority / Type values (non-blocking — bad values are cleared on import)
-      const VALID_PRIORITIES = ['High', 'Medium', 'Low'];
-      const VALID_TYPES      = ['UI', 'Functional', 'Accessibility'];
-
-      const badPriority = valid.filter(r => {
-        const p = (r['Priority'] || r['priority'] || '').toString().trim();
-        return p && !VALID_PRIORITIES.includes(p);
-      });
-      const badType = valid.filter(r => {
-        const t = (r['Test Case Type'] || r['test case type'] || '').toString().trim();
-        return t && !VALID_TYPES.includes(t);
-      });
-
-      // 5. Attempt DB insert
+      if (!valid.length) { setUploadState(null); addToast(`No data to import — all ${rows.length} rows are missing a Test Summary.`, 'error'); return; }
+      setUploadState({ phase: 'uploading', count: valid.length });
       try {
         const n = await dbBulkCreateTCs(rows);
-
-        // Build a detailed success message
+        setUploadState(null);
         const parts = [`${n} test case${n !== 1 ? 's' : ''} added successfully`];
-        if (skipped > 0)
-          parts.push(`${skipped} row${skipped !== 1 ? 's' : ''} skipped — missing Test Summary`);
-        if (badPriority.length)
-          parts.push(`${badPriority.length} invalid Priority value${badPriority.length !== 1 ? 's' : ''} cleared (use High / Medium / Low)`);
-        if (badType.length)
-          parts.push(`${badType.length} invalid Type value${badType.length !== 1 ? 's' : ''} cleared (use UI / Functional / Accessibility)`);
-
-        addToast(parts.join('  ·  '), 'success');
+        if (skipped > 0) parts.push(`${skipped} row${skipped !== 1 ? 's' : ''} skipped`);
+        addToast(parts.join(' · '), 'success');
         loadData();
       } catch (err) {
+        setUploadState(null);
         const msg = (err?.message || '').toLowerCase();
-
-        if (msg.includes('duplicate') || msg.includes('unique') || msg.includes('already exists')) {
-          addToast('Upload failed: one or more test case IDs already exist in the database.', 'error');
-        } else if (msg.includes('failed to fetch') || msg.includes('networkerror') || msg.includes('network')) {
-          addToast('Upload failed: network error. Check your internet connection and try again.', 'error');
-        } else if (msg.includes('jwt') || msg.includes('unauthorized') || msg.includes('403')) {
-          addToast('Upload failed: session expired. Refresh the page and try again.', 'error');
-        } else if (err?.message) {
-          addToast(`Upload failed: ${err.message}`, 'error');
-        } else {
-          addToast('Upload failed for an unknown reason. Please try again.', 'error');
-        }
+        if (msg.includes('duplicate') || msg.includes('unique')) addToast('Upload failed: duplicate IDs exist.', 'error');
+        else if (msg.includes('fetch') || msg.includes('network')) addToast('Upload failed: network error.', 'error');
+        else addToast(`Upload failed: ${err?.message || 'please try again'}`, 'error');
       }
     };
 
-    // ── CSV ──
     if (file.name.toLowerCase().endsWith('.csv')) {
-      Papa.parse(file, {
-        header: true,
-        skipEmptyLines: true,
-        complete: r => proc(r.data),
-        error: err =>
-          addToast(
-            `Could not read CSV: ${err?.message || 'invalid format'}. Make sure the file is saved as a proper CSV.`,
-            'error'
-          ),
-      });
-
-    // ── Excel ──
+      Papa.parse(file, { header: true, skipEmptyLines: true, complete: r => proc(r.data), error: err => { setUploadState(null); addToast(`Could not read CSV: ${err?.message || 'invalid format'}`, 'error'); } });
     } else {
-      const reader = new FileReader();
-
-      reader.onload = ev => {
-        try {
-          const wb = XLSX.read(ev.target.result, { type: 'binary' });
-
-          if (!wb.SheetNames?.length) {
-            addToast(
-              'The Excel file has no sheets. Use the ⬇ Template button to get the correct format.',
-              'error'
-            );
-            return;
-          }
-
-          const ws   = wb.Sheets[wb.SheetNames[0]];
-          const rows = XLSX.utils.sheet_to_json(ws);
-          proc(rows);
-        } catch (err) {
-          addToast(
-            `Could not read the Excel file: ${err?.message || 'unknown error'}. ` +
-            'Make sure the file is not open in Excel, then try again.',
-            'error'
-          );
-        }
+      const r = new FileReader();
+      r.onload = ev => {
+        try { const wb = XLSX.read(ev.target.result, { type: 'binary' }); proc(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]])); }
+        catch (err) { setUploadState(null); addToast(`Could not read Excel: ${err?.message || 'unknown error'}. Make sure it is not open in Excel.`, 'error'); }
       };
-
-      reader.onerror = () =>
-        addToast(
-          'The file could not be opened. Make sure it is not open in Excel or another program, then try again.',
-          'error'
-        );
-
-      reader.readAsBinaryString(file);
+      r.onerror = () => { setUploadState(null); addToast('The file could not be opened. Close it in Excel and try again.', 'error'); };
+      r.readAsBinaryString(file);
     }
   };
 
-  // ── Export to Excel ─────────────────────────────────────
+  // Export Excel
   const dlExcel = () => {
-    const HEADERS = [
-      'Test ID', 'Test Summary', 'Priority', 'Pre-requisite', 'Actions',
-      'Expected Results', 'Actual Results', 'Test Case Type', 'JIRA ID', 'Component', 'Tags',
-    ];
+    const HEADERS = ['Test ID','Test Summary','Priority','Pre-requisite','Actions','Expected Results','Actual Results','Test Case Type','JIRA ID','Component','Tags','Linked Plan IDs','Bug Details'];
     const rows = filtered.map(t => [
-      t.id || '', t.summary || '', t.priority || '', t.prerequisite || '',
-      t.actions || '', t.expectedResults || '', t.actualResults || '',
-      t.type || '', t.jiraId || '', t.component || '',
-      (t.tags || []).join(', '),
+      t.id, t.summary, t.priority, t.prerequisite, t.actions, t.expectedResults,
+      t.actualResults, t.type, t.jiraId, t.component, (t.tags || []).join(', '),
+      (tcPlanMap[t.id] || []).join(', '), t.bugDetails || '',
     ]);
     const ws = XLSX.utils.aoa_to_sheet([HEADERS, ...rows]);
-    ws['!cols'] = [
-      { wch: 12 }, { wch: 44 }, { wch: 10 }, { wch: 28 }, { wch: 28 },
-      { wch: 28 }, { wch: 28 }, { wch: 16 }, { wch: 14 }, { wch: 18 }, { wch: 22 },
-    ];
+    ws['!cols'] = [12,44,10,28,28,28,28,16,14,18,22,22,32].map(wch => ({ wch }));
     ws['!rows'] = [{ hpt: 22 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Test Cases');
-    const date = new Date().toISOString().split('T')[0];
-    XLSX.writeFile(wb, `QA_Compass_Test_Cases_${date}.xlsx`);
+    XLSX.writeFile(wb, `QA_Compass_Test_Cases_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
-  const saveTags = async (id, tags) => {
-    try { await dbUpdateTCTags(id, tags); loadData(); } catch {}
+  const saveTags = async (id, tags) => { try { await dbUpdateTCTags(id, tags); loadData(); } catch {} };
+
+  // Cell renderer — called for each col in order
+  const renderCell = (col, tc) => {
+    switch (col.k) {
+      case 'id':             return <td key="id" className="px-3 py-2.5 font-mono text-xs text-indigo-600 dark:text-indigo-400 font-semibold">{tc.id}</td>;
+      case 'summary':        return <td key="summary" className="px-3 py-2.5"><button onClick={() => setEditingTc(tc)} className="text-slate-800 dark:text-slate-100 text-xs truncate text-left w-full hover:text-indigo-600 dark:hover:text-indigo-400 hover:underline underline-offset-2" title={tc.summary}>{tc.summary}</button></td>;
+      case 'priority':       return <td key="priority" className="px-3 py-2.5">{tc.priority && <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${PRIORITY_BADGE[tc.priority] || 'bg-slate-100 text-slate-600'}`}>{tc.priority}</span>}</td>;
+      case 'prerequisite':   return <td key="prerequisite" className="px-3 py-2.5 text-slate-500 dark:text-slate-400 text-xs truncate" title={tc.prerequisite}>{tc.prerequisite}</td>;
+      case 'actions':        return <td key="actions" className="px-3 py-2.5 text-slate-500 dark:text-slate-400 text-xs truncate" title={tc.actions}>{tc.actions}</td>;
+      case 'expectedResults': return <td key="expectedResults" className="px-3 py-2.5 text-slate-500 dark:text-slate-400 text-xs truncate" title={tc.expectedResults}>{tc.expectedResults}</td>;
+      case 'type':           return <td key="type" className="px-3 py-2.5">{tc.type && <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded text-xs">{tc.type}</span>}</td>;
+      case 'jiraId':         return <td key="jiraId" className="px-3 py-2.5 text-slate-500 dark:text-slate-400 text-xs truncate">{tc.jiraId}</td>;
+      case 'component':      return <td key="component" className="px-3 py-2.5 text-slate-500 dark:text-slate-400 text-xs truncate">{tc.component}</td>;
+      case 'tags':           return <td key="tags" className="px-3 py-2.5"><TagCell id={tc.id} tags={tc.tags || []} onSave={saveTags} /></td>;
+      case 'linkedPlans':    return (
+        <td key="linkedPlans" className="px-3 py-2.5">
+          <div className="flex flex-wrap gap-1">
+            {(tcPlanMap[tc.id] || []).length === 0
+              ? <span className="text-slate-300 dark:text-slate-600 text-xs">—</span>
+              : (tcPlanMap[tc.id] || []).map(pId => (
+                  <span key={pId} className="px-1.5 py-0.5 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 rounded text-xs font-mono">{pId}</span>
+                ))}
+          </div>
+        </td>
+      );
+      case 'bugDetails':     return <td key="bugDetails" className="px-3 py-2.5"><BugCell tc={tc} onSave={saveBug} /></td>;
+      default:               return <td key={col.k} />;
+    }
   };
+
+  const thClass = 'px-3 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide bg-slate-50 dark:bg-slate-800';
 
   return (
-    <div className="p-6">
-
+    <div className="p-6 dark:text-slate-100">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Test Case Repository</h1>
-          <p className="text-sm text-slate-500 mt-0.5">{testCases.length} test cases total</p>
+          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Test Case Repository</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{testCases.length} test cases total</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Btn variant="sm" onClick={dlTemplate}>⬇ Template</Btn>
-          <Btn variant="sm" onClick={() => fileRef.current?.click()}>⬆ Upload</Btn>
+          <Btn variant="sm" onClick={() => !uploadState && fileRef.current?.click()} disabled={!!uploadState}>
+            {uploadState ? '⏳ Uploading…' : '⬆ Upload'}
+          </Btn>
           <input ref={fileRef} type="file" accept=".xlsx,.csv" className="hidden" onChange={handleUpload} />
           <Btn variant="sm" onClick={dlExcel}>⬇ Export to Excel</Btn>
           <Btn onClick={() => setShowCreate(true)}>+ Create Test Case</Btn>
@@ -338,47 +282,59 @@ export default function TestCaseRepository({ testCases, loadData, addToast }) {
       {/* Filters */}
       <div className="flex flex-wrap gap-2 mb-3">
         <input value={search} onChange={e => setSearch(e.target.value)}
-          placeholder="Search ID, Summary, JIRA…"
-          className="px-3 py-2 border border-slate-200 rounded-lg text-sm w-64 focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-        <select value={fC} onChange={e => setFC(e.target.value)} className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white">
-          <option value="">All Components</option>
-          {comps.map(c => <option key={c}>{c}</option>)}
+          placeholder="Search ID, Summary, JIRA, Plan ID…"
+          className="px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg text-sm w-72 focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500" />
+        <select value={fC} onChange={e => setFC(e.target.value)} className="px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100">
+          <option value="">All Components</option>{comps.map(c => <option key={c}>{c}</option>)}
         </select>
-        <select value={fT} onChange={e => setFT(e.target.value)} className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white">
-          <option value="">All Types</option>
-          {TC_TYPES.map(t => <option key={t}>{t}</option>)}
+        <select value={fT} onChange={e => setFT(e.target.value)} className="px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100">
+          <option value="">All Types</option>{TC_TYPES.map(t => <option key={t}>{t}</option>)}
         </select>
-        <select value={fG} onChange={e => setFG(e.target.value)} className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white">
-          <option value="">All Tags</option>
-          {allTags.map(t => <option key={t}>{t}</option>)}
+        <select value={fG} onChange={e => setFG(e.target.value)} className="px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100">
+          <option value="">All Tags</option>{allTags.map(t => <option key={t}>{t}</option>)}
         </select>
-        <select value={fP} onChange={e => setFP(e.target.value)} className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white">
-          <option value="">All Priorities</option>
-          {PRIORITIES.map(p => <option key={p}>{p}</option>)}
+        <select value={fP} onChange={e => setFP(e.target.value)} className="px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100">
+          <option value="">All Priorities</option>{PRIORITIES.map(p => <option key={p}>{p}</option>)}
+        </select>
+        <select value={fPlan} onChange={e => setFPlan(e.target.value)} className="px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100">
+          <option value="">All Test Plans</option>{planIds.map(p => <option key={p}>{p}</option>)}
         </select>
       </div>
 
-      {/* Selection action bar */}
+      {/* Upload progress banner */}
+      {uploadState && (
+        <div className="flex items-center gap-3 px-4 py-3 bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-700 rounded-lg mb-3">
+          <div className="spin shrink-0" style={{ width: 18, height: 18, border: '2.5px solid #c7d2fe', borderTopColor: '#4f46e5', borderRadius: '50%' }} />
+          <div>
+            <p className="text-sm font-medium text-indigo-700 dark:text-indigo-300">
+              {uploadState.phase === 'reading'
+                ? 'Reading file…'
+                : `Uploading ${uploadState.count} test case${uploadState.count !== 1 ? 's' : ''}…`}
+            </p>
+            <p className="text-xs text-indigo-500 dark:text-indigo-400 mt-0.5">
+              {uploadState.phase === 'reading'
+                ? 'Parsing your spreadsheet'
+                : 'Saving to database — this may take a moment for large files'}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Selection bar */}
       {selectedIds.size > 0 && (
-        <div className="flex items-center justify-between px-4 py-2.5 bg-indigo-50 border border-indigo-200 rounded-lg mb-3">
-          <span className="text-sm text-indigo-700 font-medium">
+        <div className="flex items-center justify-between px-4 py-2.5 bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-700 rounded-lg mb-3">
+          <span className="text-sm text-indigo-700 dark:text-indigo-300 font-medium">
             {selectedIds.size} test case{selectedIds.size !== 1 ? 's' : ''} selected
             {selectedIds.size < filtered.length && (
-              <button
-                onClick={() => setSelectedIds(new Set(filtered.map(t => t.id)))}
+              <button onClick={() => setSelectedIds(new Set(filtered.map(t => t.id)))}
                 className="ml-3 text-indigo-500 underline underline-offset-2 hover:text-indigo-700 text-xs font-normal">
                 Select all {filtered.length} results
               </button>
             )}
           </span>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => setSelectedIds(new Set())}
-              className="text-xs text-slate-500 hover:text-slate-700 px-2 py-1">
-              Clear selection
-            </button>
-            <button
-              onClick={() => setShowConfirm(true)}
+            <button onClick={() => setSelectedIds(new Set())} className="text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 px-2 py-1">Clear selection</button>
+            <button onClick={() => setShowConfirm(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-red-600 rounded-lg hover:bg-red-700">
               🗑 Delete {selectedIds.size} selected
             </button>
@@ -386,82 +342,47 @@ export default function TestCaseRepository({ testCases, loadData, addToast }) {
         </div>
       )}
 
+      {/* Resize hint */}
+      <p className="text-xs text-slate-400 dark:text-slate-500 mb-1.5">
+        ↔ Drag column edges to resize · ✥ Drag headers to reorder
+      </p>
+
       {/* Table */}
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
         <div className="overflow-x-auto">
-          <table style={{ tableLayout: 'fixed', minWidth: '1305px', width: '100%' }} className="text-sm">
+          <table style={{ tableLayout: 'fixed', width: '100%', minWidth: `${44 + cols.reduce((s, c) => s + parseFloat(c.w), 0)}px` }} className="text-sm">
             <colgroup>
               <col style={{ width: '44px' }} />
-              {COLS.map(c => <col key={c.k} style={{ width: c.w }} />)}
+              {cols.map(c => <col key={c.k} style={{ width: c.w }} />)}
             </colgroup>
             <thead>
-              <tr className="bg-slate-50 border-b border-slate-200">
-                {/* Header checkbox */}
-                <th className="px-3 py-3 text-center">
-                  <Checkbox
-                    checked={allFilteredSelected}
-                    indeterminate={someSelected}
-                    onChange={toggleAll}
-                  />
+              <tr className="border-b border-slate-200 dark:border-slate-700">
+                <th className={`${thClass} text-center`}>
+                  <Checkbox checked={allFilteredSelected} indeterminate={someSelected} onChange={toggleAll} />
                 </th>
-                {COLS.map(c => (
-                  <th key={c.k}
-                    onClick={c.s ? () => sort(c.s) : undefined}
-                    className={`px-3 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide ${c.s ? 'cursor-pointer hover:bg-slate-100 select-none' : ''}`}>
-                    {c.l}{c.s && <SH col={c.s} sortCol={sortCol} sortDir={sortDir} />}
-                  </th>
+                {cols.map(col => (
+                  <ResizableTh key={col.k} col={col} startResize={startResize} drag={drag} dragOver={dragOver}
+                    className={thClass}
+                    onClick={col.s ? () => sort(col.s) : undefined}>
+                    {col.l}{col.s && <SH col={col.s} sortCol={sortCol} sortDir={sortDir} />}
+                  </ResizableTh>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
               {paged.length === 0 ? (
-                <tr>
-                  <td colSpan={11} className="text-center py-16">
-                    <div className="text-4xl mb-2">📋</div>
-                    <p className="text-slate-400 text-sm">
-                      {testCases.length === 0
-                        ? 'No test cases yet — create one or upload from a template'
-                        : 'No test cases match the current filters'}
-                    </p>
-                  </td>
-                </tr>
+                <tr><td colSpan={cols.length + 1} className="text-center py-16">
+                  <div className="text-4xl mb-2">📋</div>
+                  <p className="text-slate-400 dark:text-slate-500 text-sm">
+                    {testCases.length === 0 ? 'No test cases yet — create one or upload from a template' : 'No test cases match the current filters'}
+                  </p>
+                </td></tr>
               ) : paged.map(tc => (
-                <tr key={tc.id}
-                  className={`hover:bg-slate-50 ${selectedIds.has(tc.id) ? 'bg-indigo-50/60' : ''}`}>
-                  {/* Row checkbox */}
+                <tr key={tc.id} className={`hover:bg-slate-50 dark:hover:bg-slate-800/60 ${selectedIds.has(tc.id) ? 'bg-indigo-50/60 dark:bg-indigo-900/20' : ''}`}>
                   <td className="px-3 py-2.5 text-center">
-                    <Checkbox
-                      checked={selectedIds.has(tc.id)}
-                      onChange={() => toggleOne(tc.id)}
-                    />
+                    <Checkbox checked={selectedIds.has(tc.id)} onChange={() => toggleOne(tc.id)} />
                   </td>
-                  <td className="px-3 py-2.5 font-mono text-xs text-indigo-600 font-semibold">{tc.id}</td>
-                  <td className="px-3 py-2.5">
-                    <button
-                      onClick={() => setEditingTc(tc)}
-                      className="text-slate-800 text-xs truncate text-left w-full hover:text-indigo-600 hover:underline underline-offset-2"
-                      title={tc.summary}>
-                      {tc.summary}
-                    </button>
-                  </td>
-                  <td className="px-3 py-2.5">
-                    {tc.priority && (
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${PRIORITY_BADGE[tc.priority] || 'bg-slate-100 text-slate-600'}`}>
-                        {tc.priority}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2.5 text-slate-500 text-xs truncate" title={tc.prerequisite}>{tc.prerequisite}</td>
-                  <td className="px-3 py-2.5 text-slate-500 text-xs truncate" title={tc.actions}>{tc.actions}</td>
-                  <td className="px-3 py-2.5 text-slate-500 text-xs truncate" title={tc.expectedResults}>{tc.expectedResults}</td>
-                  <td className="px-3 py-2.5">
-                    {tc.type && <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-xs">{tc.type}</span>}
-                  </td>
-                  <td className="px-3 py-2.5 text-slate-500 text-xs truncate">{tc.jiraId}</td>
-                  <td className="px-3 py-2.5 text-slate-500 text-xs truncate">{tc.component}</td>
-                  <td className="px-3 py-2.5">
-                    <TagCell id={tc.id} tags={tc.tags || []} onSave={saveTags} />
-                  </td>
+                  {cols.map(col => renderCell(col, tc))}
                 </tr>
               ))}
             </tbody>
@@ -470,57 +391,25 @@ export default function TestCaseRepository({ testCases, loadData, addToast }) {
         <Pagination total={filtered.length} page={page} perPage={PER_PAGE} onChange={setPage} />
       </div>
 
-      {/* Create modal */}
-      {showCreate && (
-        <CreateTCModal
-          onClose={() => setShowCreate(false)}
-          onCreated={() => loadData()}
-          addToast={addToast}
-          previewId="Auto-generated"
-        />
-      )}
+      {showCreate && <CreateTCModal onClose={() => setShowCreate(false)} onCreated={() => loadData()} addToast={addToast} previewId="Auto-generated" />}
+      {editingTc  && <EditTCModal tc={editingTc} onClose={() => setEditingTc(null)} onSaved={() => loadData()} addToast={addToast} />}
 
-      {/* Edit modal */}
-      {editingTc && (
-        <EditTCModal
-          tc={editingTc}
-          onClose={() => setEditingTc(null)}
-          onSaved={() => loadData()}
-          addToast={addToast}
-        />
-      )}
-
-      {/* Delete confirm modal */}
       {showConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl p-6 max-w-sm w-full">
-            <h3 className="text-base font-semibold text-slate-800 mb-2">
-              Delete {selectedIds.size} test case{selectedIds.size !== 1 ? 's' : ''}?
-            </h3>
-            <p className="text-sm text-slate-500 mb-5">
-              This will permanently remove the selected test cases and unlink them from any test plans.
-              This action cannot be undone.
-            </p>
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl p-6 max-w-sm w-full border border-slate-100 dark:border-slate-700">
+            <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100 mb-2">Delete {selectedIds.size} test case{selectedIds.size !== 1 ? 's' : ''}?</h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-5">This will permanently remove the selected test cases and unlink them from any test plans.</p>
             <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setShowConfirm(false)}
-                disabled={deleting}
-                className="px-4 py-2 text-sm text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50">
-                Cancel
-              </button>
-              <button
-                onClick={confirmDelete}
-                disabled={deleting}
+              <button onClick={() => setShowConfirm(false)} disabled={deleting}
+                className="px-4 py-2 text-sm text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50">Cancel</button>
+              <button onClick={confirmDelete} disabled={deleting}
                 className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center gap-2">
-                {deleting ? (
-                  <><span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full spin inline-block" /> Deleting…</>
-                ) : `Delete ${selectedIds.size}`}
+                {deleting ? <><span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full spin inline-block" /> Deleting…</> : `Delete ${selectedIds.size}`}
               </button>
             </div>
           </div>
         </div>
       )}
-
     </div>
   );
 }

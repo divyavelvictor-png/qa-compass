@@ -1,4 +1,41 @@
 import { supabase } from './supabase';
+import { PRIORITIES, TC_TYPES } from './constants';
+
+// ── Normalization helpers (applied at every write) ───────
+// Ensures consistent data in the DB regardless of how it was entered.
+
+const trim  = s => (s || '').toString().trim();
+
+// Sentence-case: "craftizen" → "Craftizen", preserves "iOS", "JIRA" etc.
+const cap   = s => { const t = trim(s); return t ? t.charAt(0).toUpperCase() + t.slice(1) : ''; };
+
+// Match against a known controlled list (case-insensitive), fallback to trimmed value
+const norm  = (s, list) => { const t = trim(s); return list.find(x => x.toLowerCase() === t.toLowerCase()) || t; };
+
+// Normalize a TC form before writing to DB
+const normTC = f => ({
+  summary:          trim(f.summary),
+  priority:         norm(f.priority,  PRIORITIES),
+  prerequisite:     trim(f.prerequisite),
+  actions:          trim(f.actions),
+  expected_results: trim(f.expectedResults || f.expected_results),
+  actual_results:   trim(f.actualResults   || f.actual_results),
+  type:             norm(f.type, TC_TYPES),
+  jira_id:          trim(f.jiraId || f.jira_id).toUpperCase().replace(/\s+/g, '') || '',
+  component:        cap(f.component),
+  tags:             (f.tags || []).map(t => trim(t)).filter(Boolean),
+  bug_details:      trim(f.bugDetails || f.bug_details || ''),
+});
+
+// Normalize a TP form before writing to DB
+const normTP = f => ({
+  summary:      trim(f.summary),
+  fix_versions: trim(f.fixVersions || f.fix_versions),
+  release:      trim(f.release),
+  sprint:       trim(f.sprint),
+  component:    cap(f.component),
+  labels:       (f.labels || []).map(l => trim(l)).filter(Boolean),
+});
 
 // ── Row mappers (DB snake_case → app camelCase) ──────────
 export const tcFromDb = r => ({
@@ -6,7 +43,9 @@ export const tcFromDb = r => ({
   prerequisite: r.prerequisite || '', actions: r.actions || '',
   expectedResults: r.expected_results || '', actualResults: r.actual_results || '',
   type: r.type || '', jiraId: r.jira_id || '',
-  component: r.component || '', tags: r.tags || [], createdAt: r.created_at,
+  component: r.component || '', tags: r.tags || [],
+  bugDetails: r.bug_details || '',
+  createdAt: r.created_at,
 });
 
 export const tpFromDb = r => ({
@@ -34,19 +73,8 @@ export async function dbCreateTC(form) {
   const { data: val, error: ce } = await supabase.rpc('increment_counter', { counter_name: 'tc' });
   if (ce) throw ce;
   const id = `TC-${String(val).padStart(4, '0')}`;
-  const { error } = await supabase.from('test_cases').insert({
-    id,
-    summary:          form.summary,
-    priority:         form.priority        || '',
-    prerequisite:     form.prerequisite    || '',
-    actions:          form.actions         || '',
-    expected_results: form.expectedResults || '',
-    actual_results:   form.actualResults   || '',
-    type:             form.type            || '',
-    jira_id:          form.jiraId          || '',
-    component:        form.component       || '',
-    tags:             form.tags            || [],
-  });
+  const n  = normTC(form);
+  const { error } = await supabase.from('test_cases').insert({ id, ...n });
   if (error) throw error;
   return id;
 }
@@ -60,50 +88,50 @@ export async function dbBulkCreateTCs(rows) {
   });
   if (ce) throw ce;
   const start = ev - valid.length + 1;
-  const ins = valid.map((row, i) => ({
-    id:               `TC-${String(start + i).padStart(4, '0')}`,
-    summary:          String(row['Test Summary']    || row['test summary']    || ''),
-    priority:         row['Priority']               || row['priority']               || '',
-    prerequisite:     row['Pre-Requisite']          || row['Pre-requisite']          || row['Prerequisite'] || row['prerequisite'] || '',
-    actions:          row['Actions']                || row['actions']                || '',
-    expected_results: row['Expected Results']       || row['expected results']       || '',
-    actual_results:   row['Actual Results']         || row['actual results']         || '',
-    type:             row['Test Case Type']         || row['test case type']         || '',
-    jira_id:          row['JIRA ID (Optional)'] || row['JIRA ID'] || row['jira id'] || '',
-    component:        row['Component']              || row['component']              || '',
-    tags:             (row['Tags (Optional)'] || row['Tags'] || row['tags'] || '')
-                        .toString().split(',').map(t => t.trim()).filter(Boolean),
-  }));
+
+  const ins = valid.map((row, i) => {
+    const raw = {
+      summary:         row['Test Summary']         || row['test summary']         || '',
+      priority:        row['Priority']             || row['priority']             || '',
+      prerequisite:    row['Pre-Requisite']        || row['Pre-requisite']        || row['Prerequisite'] || row['prerequisite'] || '',
+      actions:         row['Actions']              || row['actions']              || '',
+      expectedResults: row['Expected Results']     || row['expected results']     || '',
+      actualResults:   row['Actual Results']       || row['actual results']       || '',
+      type:            row['Test Case Type']       || row['test case type']       || '',
+      jiraId:          row['JIRA ID (Optional)']   || row['JIRA ID']              || row['jira id']  || '',
+      component:       row['Component']            || row['component']            || '',
+      bugDetails:      row['Bug Details (Optional)'] || row['Bug Details']        || row['bug details'] || '',
+      tags:            (row['Tags (Optional)'] || row['Tags'] || row['tags'] || '')
+                         .toString().split(',').map(t => t.trim()).filter(Boolean),
+    };
+    const n = normTC(raw);
+    return { id: `TC-${String(start + i).padStart(4, '0')}`, ...n };
+  });
+
   const { error } = await supabase.from('test_cases').insert(ins);
   if (error) throw error;
   return valid.length;
 }
 
 export async function dbUpdateTCTags(id, tags) {
-  const { error } = await supabase.from('test_cases').update({ tags }).eq('id', id);
+  const cleaned = (tags || []).map(t => trim(t)).filter(Boolean);
+  const { error } = await supabase.from('test_cases').update({ tags: cleaned }).eq('id', id);
   if (error) throw error;
 }
 
 export async function dbUpdateTC(id, form) {
-  const { error } = await supabase.from('test_cases').update({
-    summary:          form.summary          || '',
-    priority:         form.priority         || '',
-    prerequisite:     form.prerequisite     || '',
-    actions:          form.actions          || '',
-    expected_results: form.expectedResults  || '',
-    actual_results:   form.actualResults    || '',
-    type:             form.type             || '',
-    jira_id:          form.jiraId           || '',
-    component:        form.component        || '',
-    tags:             form.tags             || [],
-  }).eq('id', id);
+  const n = normTC(form);
+  const { error } = await supabase.from('test_cases').update(n).eq('id', id);
+  if (error) throw error;
+}
+
+export async function dbUpdateTCBugDetails(id, bugDetails) {
+  const { error } = await supabase.from('test_cases').update({ bug_details: trim(bugDetails) }).eq('id', id);
   if (error) throw error;
 }
 
 export async function dbDeleteTCs(ids) {
   if (!ids?.length) return;
-
-  // Remove these TC IDs from any test plans that reference them
   const { data: plans } = await supabase.from('test_plans').select('id, test_case_ids');
   const affected = (plans || []).filter(p =>
     (p.test_case_ids || []).some(id => ids.includes(id))
@@ -115,11 +143,7 @@ export async function dbDeleteTCs(ids) {
         .eq('id', p.id)
     ));
   }
-
-  // Delete execution records that reference these TCs
   await supabase.from('execution_records').delete().in('tc_id', ids);
-
-  // Delete the test cases themselves
   const { error } = await supabase.from('test_cases').delete().in('id', ids);
   if (error) throw error;
 }
@@ -133,58 +157,45 @@ export async function dbGetTPs() {
 
 export async function dbGetNextTPId() {
   try {
-    const { data } = await supabase
-      .from('counters').select('value').eq('name', 'tp').single();
+    const { data } = await supabase.from('counters').select('value').eq('name', 'tp').single();
     const next = (data?.value || 0) + 1;
     return `TP-${String(next).padStart(4, '0')}`;
-  } catch {
-    return 'Auto-generated';
-  }
+  } catch { return 'Auto-generated'; }
 }
 
 export async function dbCreateTP(form) {
   const { data: val, error: ce } = await supabase.rpc('increment_counter', { counter_name: 'tp' });
   if (ce) throw ce;
   const id = `TP-${String(val).padStart(4, '0')}`;
+  const n  = normTP(form);
   const { error } = await supabase.from('test_plans').insert({
-    id,
-    summary:       form.summary      || '',
-    fix_versions:  form.fixVersions  || '',
-    release:       form.release      || '',
-    sprint:        form.sprint,
-    labels:        form.labels       || [],
-    component:     form.component    || '',
-    test_case_ids: [],
+    id, ...n, test_case_ids: [],
   });
   if (error) throw error;
   return id;
 }
 
+export async function dbUpdateTP(id, form) {
+  const n = normTP(form);
+  const { error } = await supabase.from('test_plans').update(n).eq('id', id);
+  if (error) throw error;
+}
+
 export async function dbUpdateTPIds(planId, ids) {
-  const { error } = await supabase
-    .from('test_plans')
-    .update({ test_case_ids: ids })
-    .eq('id', planId);
+  const { error } = await supabase.from('test_plans').update({ test_case_ids: ids }).eq('id', planId);
   if (error) throw error;
 }
 
 export async function dbDeleteTPs(ids) {
   if (!ids?.length) return;
-
-  // Delete all execution records for these plans
   await supabase.from('execution_records').delete().in('plan_id', ids);
-
-  // Delete the test plans themselves
   const { error } = await supabase.from('test_plans').delete().in('id', ids);
   if (error) throw error;
 }
 
 // ── Execution Records ────────────────────────────────────
 export async function dbGetExecForPlan(planId) {
-  const { data, error } = await supabase
-    .from('execution_records')
-    .select('*')
-    .eq('plan_id', planId);
+  const { data, error } = await supabase.from('execution_records').select('*').eq('plan_id', planId);
   if (error) throw error;
   const map = {};
   (data || []).forEach(r => { map[r.tc_id] = exFromDb(r); });
@@ -199,7 +210,6 @@ export async function dbGetAllExec() {
   return map;
 }
 
-// Returns per-plan execution stats keyed by plan_id
 export async function dbGetAllExecGrouped() {
   const { data, error } = await supabase.from('execution_records').select('*');
   if (error) throw error;
@@ -210,15 +220,14 @@ export async function dbGetAllExecGrouped() {
     g.tcIds.add(r.tc_id);
     if (r.status) {
       g.total++;
-      if (r.status === 'Pass')         g.pass++;
-      else if (r.status === 'Fail')    g.fail++;
+      if      (r.status === 'Pass')         g.pass++;
+      else if (r.status === 'Fail')         g.fail++;
       else if (r.status === 'Rerun - Pass') g.rerunPass++;
       else if (r.status === 'Rerun - Fail') g.rerunFail++;
     }
     if (r.executed_on && (!g.lastExecuted || r.executed_on > g.lastExecuted))
       g.lastExecuted = r.executed_on;
   });
-  // Convert Set → count
   Object.values(grouped).forEach(g => { g.tcCount = g.tcIds.size; delete g.tcIds; });
   return grouped;
 }
@@ -228,12 +237,12 @@ export async function dbUpsertExec(planId, tcId, rec) {
     {
       plan_id:     planId,
       tc_id:       tcId,
-      status:      rec.status      || null,
-      bug_id:      rec.bugId       || '',
-      assignee:    rec.assignee    || '',
-      artifacts:   rec.artifacts   || [],
-      created_on:  rec.createdOn   || new Date().toISOString().split('T')[0],
-      executed_on: rec.executedOn  || null,
+      status:      rec.status     || null,
+      bug_id:      trim(rec.bugId)    || '',
+      assignee:    trim(rec.assignee) || '',
+      artifacts:   rec.artifacts  || [],
+      created_on:  rec.createdOn  || new Date().toISOString().split('T')[0],
+      executed_on: rec.executedOn || null,
     },
     { onConflict: 'plan_id,tc_id' }
   );

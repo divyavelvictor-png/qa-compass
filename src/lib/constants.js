@@ -24,16 +24,19 @@ export const PRIORITY_BADGE = {
 };
 
 export const CHART_COLORS = {
-  Pass:           '#16a34a',
-  Fail:           '#dc2626',
-  'Rerun - Pass': '#d97706',
-  'Rerun - Fail': '#b91c1c',
-  UI:             '#6366f1',
-  Functional:     '#0ea5e9',
-  Accessibility:  '#8b5cf6',
-  High:           '#ef4444',
-  Medium:         '#f59e0b',
-  Low:            '#22c55e',
+  Pass:            '#16a34a',
+  Fail:            '#dc2626',
+  'Rerun - Pass':  '#d97706',
+  'Rerun - Fail':  '#b91c1c',
+  UI:              '#6366f1',
+  Functional:      '#0ea5e9',
+  Accessibility:   '#8b5cf6',
+  High:            '#ef4444',
+  Medium:          '#f59e0b',
+  Low:             '#22c55e',
+  'Not Started':   '#94a3b8',
+  'In Progress':   '#f59e0b',
+  Completed:       '#22c55e',
 };
 
 export const FALLBACK_CLR = ['#6366f1', '#0ea5e9', '#8b5cf6', '#f59e0b', '#22c55e', '#f43f5e'];

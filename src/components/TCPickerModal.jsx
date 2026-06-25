@@ -91,14 +91,14 @@ export default function TCPickerModal({ testCases, alreadyLinked, onAdd, onClose
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl flex flex-col"
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-5xl flex flex-col"
         style={{ maxHeight: '90vh' }}>
 
         {/* ── Header ── */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-700 dark:border-slate-700 shrink-0">
           <div>
-            <h2 className="text-base font-semibold text-slate-800">Select Test Cases</h2>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">Select Test Cases</h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
               {filtered.length} available
               {selectedIds.size > 0 && ` · ${selectedIds.size} selected`}
             </p>
@@ -110,7 +110,7 @@ export default function TCPickerModal({ testCases, alreadyLinked, onAdd, onClose
         </div>
 
         {/* ── Filters ── */}
-        <div className="px-6 py-3 border-b border-slate-100 flex flex-wrap gap-2 shrink-0 bg-slate-50">
+        <div className="px-6 py-3 border-b border-slate-100 dark:border-slate-700 flex flex-wrap gap-2 shrink-0 bg-slate-50">
           <input
             value={search}
             onChange={e => applyFilter(setSearch, e.target.value)}
@@ -163,7 +163,7 @@ export default function TCPickerModal({ testCases, alreadyLinked, onAdd, onClose
               <col style={{ width: '120px' }} />
               <col style={{ width: 'auto' }} />
             </colgroup>
-            <thead className="bg-slate-50 sticky top-0 z-10">
+            <thead className="bg-slate-50 dark:bg-slate-800 sticky top-0 z-10">
               <tr className="border-b border-slate-200">
                 <th className="px-3 py-3 text-center">
                   <input
@@ -186,7 +186,7 @@ export default function TCPickerModal({ testCases, alreadyLinked, onAdd, onClose
                 <tr>
                   <td colSpan={6} className="text-center py-16">
                     <div className="text-3xl mb-2">🔍</div>
-                    <p className="text-slate-400 text-sm">
+                    <p className="text-slate-400 dark:text-slate-500 text-sm">
                       {available.length === 0
                         ? 'All test cases are already linked to this plan'
                         : 'No test cases match the current filters'}
@@ -210,7 +210,7 @@ export default function TCPickerModal({ testCases, alreadyLinked, onAdd, onClose
                     />
                   </td>
                   <td className="px-3 py-2.5 font-mono text-xs text-indigo-600 font-semibold">{tc.id}</td>
-                  <td className="px-3 py-2.5 text-slate-800 text-xs truncate" title={tc.summary}>{tc.summary}</td>
+                  <td className="px-3 py-2.5 text-slate-800 dark:text-slate-100 text-xs truncate" title={tc.summary}>{tc.summary}</td>
                   <td className="px-3 py-2.5">
                     {tc.priority && (
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${PRIORITY_BADGE[tc.priority] || 'bg-slate-100 text-slate-600'}`}>
@@ -223,7 +223,7 @@ export default function TCPickerModal({ testCases, alreadyLinked, onAdd, onClose
                       <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-xs">{tc.type}</span>
                     )}
                   </td>
-                  <td className="px-3 py-2.5 text-slate-500 text-xs truncate">{tc.component}</td>
+                  <td className="px-3 py-2.5 text-slate-500 dark:text-slate-400 text-xs truncate">{tc.component}</td>
                 </tr>
               ))}
             </tbody>
@@ -232,7 +232,7 @@ export default function TCPickerModal({ testCases, alreadyLinked, onAdd, onClose
 
         {/* ── Pagination ── */}
         {filtered.length > PICKER_PER_PAGE && (
-          <div className="shrink-0 border-t border-slate-100">
+          <div className="shrink-0 border-t border-slate-100 dark:border-slate-700">
             <Pagination
               total={filtered.length}
               page={page}
@@ -243,8 +243,8 @@ export default function TCPickerModal({ testCases, alreadyLinked, onAdd, onClose
         )}
 
         {/* ── Footer ── */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50 rounded-b-xl shrink-0">
-          <p className="text-sm text-slate-500">
+        <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 rounded-b-xl shrink-0">
+          <p className="text-sm text-slate-500 dark:text-slate-400">
             {selectedIds.size > 0
               ? `${selectedIds.size} test case${selectedIds.size !== 1 ? 's' : ''} selected`
               : 'Click rows or checkboxes to select test cases'}

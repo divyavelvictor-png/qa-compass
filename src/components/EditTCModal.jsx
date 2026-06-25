@@ -15,6 +15,7 @@ export default function EditTCModal({ tc, onClose, onSaved, addToast }) {
     jiraId:          tc.jiraId          || '',
     component:       tc.component       || '',
     tags:            tc.tags            || [],
+    bugDetails:      tc.bugDetails      || '',
   });
   const [saving, setSaving] = useState(false);
 
@@ -131,6 +132,15 @@ export default function EditTCModal({ tc, onClose, onSaved, addToast }) {
           chips={f.tags}
           onChange={tags => setF(p => ({ ...p, tags }))}
           placeholder="Add tag…"
+        />
+      </Fld>
+
+      <Fld label="Bug Details">
+        <Txa
+          value={f.bugDetails}
+          onChange={upd('bugDetails')}
+          placeholder="e.g. BUG-123 Login fails on mobile"
+          rows={2}
         />
       </Fld>
     </Modal>

@@ -7,7 +7,7 @@ export default function CreateTCModal({ onClose, onCreated, addToast, previewId 
   const [f, setF] = useState({
     summary: '', priority: '', prerequisite: '', actions: '',
     expectedResults: '', actualResults: '', type: '',
-    jiraId: '', component: '', tags: [],
+    jiraId: '', component: '', tags: [], bugDetails: '',
   });
 
   const upd = k => e => setF(p => ({ ...p, [k]: e.target.value }));
@@ -67,6 +67,9 @@ export default function CreateTCModal({ onClose, onCreated, addToast, previewId 
       </Fld>
       <Fld label="Tags">
         <ChipInput chips={f.tags} onChange={tags => setF(p => ({ ...p, tags }))} />
+      </Fld>
+      <Fld label="Bug Details">
+        <Txa value={f.bugDetails} onChange={upd('bugDetails')} placeholder="e.g. BUG-123 Login fails on mobile" rows={2} />
       </Fld>
     </Modal>
   );

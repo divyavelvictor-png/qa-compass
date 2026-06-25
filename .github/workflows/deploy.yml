@@ -1,0 +1,48 @@
+name: Build and Deploy
+
+# Triggers: every push to main, or manually from GitHub Actions tab
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+# Allow the workflow to push to the gh-pages branch
+permissions:
+  contents: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Check out the source code
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      # 2. Set up Node.js 20 with npm caching
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # 3. Install dependencies
+      #    --legacy-peer-deps handles the vite peer dependency quirk
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
+      # 4. Build the app
+      #    Supabase credentials come from GitHub Secrets (never in source code)
+      - name: Build
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+
+      # 5. Push the built dist/ folder to the gh-pages branch
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          force_orphan: true

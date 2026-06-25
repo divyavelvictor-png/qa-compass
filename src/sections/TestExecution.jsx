@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { tpFromDb, dbGetExecForPlan, dbUpsertExec, dbGetAllExecGrouped } from '../lib/db';
 import { EXEC_STATUSES, STATUS_ROW, PER_PAGE } from '../lib/constants';
+import { useTheme } from '../lib/theme.jsx';
 import { Btn, Inp, Pagination } from '../components/ui';
 
 // Inline styles — Tailwind bg-* unreliable on native <select> in Chrome/Windows
@@ -55,10 +56,10 @@ function ExecRow({ tc, exec, planId, onUpdate }) {
 
   return (
     <tr className={exec.status ? (STATUS_ROW[exec.status] || '') : ''}>
-      <td className="px-3 py-2.5 text-slate-800 text-xs font-medium truncate" title={tc.summary}>{tc.summary}</td>
-      <td className="px-3 py-2.5 text-slate-500 text-xs truncate" title={tc.prerequisite}>{tc.prerequisite}</td>
-      <td className="px-3 py-2.5 text-slate-500 text-xs truncate" title={tc.actions}>{tc.actions}</td>
-      <td className="px-3 py-2.5 text-slate-500 text-xs truncate" title={tc.expectedResults}>{tc.expectedResults}</td>
+      <td className="px-3 py-2.5 text-slate-800 dark:text-slate-100 text-xs font-medium truncate" title={tc.summary}>{tc.summary}</td>
+      <td className="px-3 py-2.5 text-slate-500 dark:text-slate-400 text-xs truncate" title={tc.prerequisite}>{tc.prerequisite}</td>
+      <td className="px-3 py-2.5 text-slate-500 dark:text-slate-400 text-xs truncate" title={tc.actions}>{tc.actions}</td>
+      <td className="px-3 py-2.5 text-slate-500 dark:text-slate-400 text-xs truncate" title={tc.expectedResults}>{tc.expectedResults}</td>
       <td className="px-3 py-2.5">
         <select value={exec.status || ''} onChange={handleStatus}
           style={exec.status ? STATUS_SELECT_STYLE[exec.status] : {}}
@@ -70,7 +71,7 @@ function ExecRow({ tc, exec, planId, onUpdate }) {
       <td className="px-3 py-2.5">
         <input value={bugId} onChange={e => setBugId(e.target.value)} onBlur={() => persist({ bugId })}
           placeholder="BUG-XXX"
-          className="w-full px-2 py-1 text-xs border border-slate-200 rounded-lg focus:outline-none bg-transparent" />
+          className="w-full px-2 py-1 text-xs border border-slate-200 dark:border-slate-600 rounded-lg focus:outline-none bg-transparent dark:bg-transparent dark:text-slate-100" />
       </td>
       <td className="px-3 py-2.5">
         <div className="space-y-0.5">
@@ -96,11 +97,11 @@ function ExecRow({ tc, exec, planId, onUpdate }) {
       <td className="px-3 py-2.5">
         <input value={assignee} onChange={e => setAssignee(e.target.value)} onBlur={() => persist({ assignee })}
           placeholder="Name"
-          className="w-full px-2 py-1 text-xs border border-slate-200 rounded-lg focus:outline-none bg-transparent" />
+          className="w-full px-2 py-1 text-xs border border-slate-200 dark:border-slate-600 rounded-lg focus:outline-none bg-transparent dark:bg-transparent dark:text-slate-100" />
       </td>
       <td className="px-3 py-2.5">
         <input type="date" value={createdOn} onChange={e => setCreatedOn(e.target.value)} onBlur={() => persist({ createdOn })}
-          className="w-full px-2 py-1 text-xs border border-slate-200 rounded-lg focus:outline-none bg-transparent" />
+          className="w-full px-2 py-1 text-xs border border-slate-200 dark:border-slate-600 rounded-lg focus:outline-none bg-transparent dark:bg-transparent dark:text-slate-100" />
       </td>
       <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">
         {exec.executedOn ? fmt(exec.executedOn) : <span className="text-slate-300">—</span>}
@@ -111,7 +112,7 @@ function ExecRow({ tc, exec, planId, onUpdate }) {
 
 // ── Stat pill ─────────────────────────────────────────────
 function Pill({ value, bg, text }) {
-  if (!value) return <span className="text-slate-300 text-xs">—</span>;
+  if (!value) return <span className="text-slate-400 dark:text-slate-500 text-xs">—</span>;
   return (
     <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-semibold min-w-[28px]"
       style={{ backgroundColor: bg, color: text }}>
@@ -122,6 +123,7 @@ function Pill({ value, bg, text }) {
 
 // ── Test Execution ────────────────────────────────────────
 export default function TestExecution({ testCases, testPlans, addToast }) {
+  const { dark } = useTheme();
   const [planIn,    setPlanIn]    = useState('');
   const [plan,      setPlan]      = useState(null);
   const [planErr,   setPlanErr]   = useState('');
@@ -211,7 +213,13 @@ export default function TestExecution({ testCases, testPlans, addToast }) {
   const ECOLS = ['Test Summary','Pre-requisite','Actions','Expected Results','Status','Bug ID','Artifacts','Assignee','Created On','Executed On'];
   const EW    = [185,135,135,135,125,105,155,115,110,130];
 
-  const statCards = [
+  const statCards = dark ? [
+    { label: 'Total Executed', value: stats.total,     bg: '#1e293b', text: '#e2e8f0' },
+    { label: 'Pass',           value: stats.pass,      bg: '#14532d', text: '#86efac' },
+    { label: 'Fail',           value: stats.fail,      bg: '#7f1d1d', text: '#fca5a5' },
+    { label: 'Rerun Pass',     value: stats.rerunPass, bg: '#78350f', text: '#fcd34d' },
+    { label: 'Rerun Fail',     value: stats.rerunFail, bg: '#7c2d12', text: '#fdba74' },
+  ] : [
     { label: 'Total Executed', value: stats.total,     bg: '#f1f5f9', text: '#1e293b' },
     { label: 'Pass',           value: stats.pass,      bg: '#dcfce7', text: '#166534' },
     { label: 'Fail',           value: stats.fail,      bg: '#fee2e2', text: '#991b1b' },
@@ -226,8 +234,8 @@ export default function TestExecution({ testCases, testPlans, addToast }) {
   };
 
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold text-slate-800 mb-6">Test Execution</h1>
+    <div className="p-6 dark:text-slate-100">
+      <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-6">Test Execution</h1>
 
       {/* ── Plan ID input ── */}
       <div className="mb-6">
@@ -245,36 +253,36 @@ export default function TestExecution({ testCases, testPlans, addToast }) {
       {plan && (
         <div className="mb-8">
           {/* Plan details card */}
-          <div className="bg-white rounded-xl border border-slate-200 p-5 mb-5">
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-5 mb-5">
             <div className="flex items-start justify-between gap-4 mb-4">
               <div>
-                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Test Plan</span>
-                <h2 className="text-lg font-bold text-slate-800 mt-0.5">{plan.id}</h2>
-                {plan.summary && <p className="text-sm text-slate-600 mt-0.5">{plan.summary}</p>}
+                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Test Plan</span>
+                <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 mt-0.5">{plan.id}</h2>
+                {plan.summary && <p className="text-sm text-slate-600 dark:text-slate-300 mt-0.5">{plan.summary}</p>}
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                <span className="text-xs text-slate-400 bg-slate-50 border border-slate-200 px-2 py-1 rounded">
+                <span className="text-xs text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 px-2 py-1 rounded">
                   {linked.length} test case{linked.length !== 1 ? 's' : ''}
                 </span>
                 <button onClick={() => { setPlan(null); setPlanIn(''); localStorage.removeItem(LAST_PLAN_KEY); }}
-                  className="text-xs text-slate-400 hover:text-slate-600 px-2 py-1 rounded hover:bg-slate-100">
+                  className="text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 px-2 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700">
                   ✕ Close
                 </button>
               </div>
             </div>
-            <div className="flex flex-wrap gap-x-8 gap-y-3 border-t border-slate-100 pt-4">
+            <div className="flex flex-wrap gap-x-8 gap-y-3 border-t border-slate-100 dark:border-slate-700 pt-4">
               {[['Sprint', plan.sprint], ['Fix Version', plan.fixVersions], ['Release', plan.release], ['Component', plan.component]]
                 .map(([k, v]) => v && (
                   <div key={k}>
-                    <p className="text-xs text-slate-400">{k}</p>
-                    <p className="text-sm font-medium text-slate-800 mt-0.5">{v}</p>
+                    <p className="text-xs text-slate-400 dark:text-slate-400">{k}</p>
+                    <p className="text-sm font-medium text-slate-800 dark:text-slate-100 mt-0.5">{v}</p>
                   </div>
                 ))}
               {(plan.labels || []).length > 0 && (
                 <div>
-                  <p className="text-xs text-slate-400 mb-1">Labels</p>
+                  <p className="text-xs text-slate-400 dark:text-slate-400 mb-1">Labels</p>
                   <div className="flex flex-wrap gap-1">
-                    {plan.labels.map(l => <span key={l} className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-xs">{l}</span>)}
+                    {plan.labels.map(l => <span key={l} className="px-2 py-0.5 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 rounded-full text-xs">{l}</span>)}
                   </div>
                 </div>
               )}
@@ -298,16 +306,16 @@ export default function TestExecution({ testCases, testPlans, addToast }) {
               <div className="spin" style={{ width: 32, height: 32, border: '4px solid #e0e7ff', borderTopColor: '#4f46e5', borderRadius: '50%' }} />
             </div>
           ) : (
-            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
               <div className="overflow-x-auto">
                 <table style={{ tableLayout: 'fixed', minWidth: '1430px', width: '100%' }} className="text-sm">
                   <colgroup>{EW.map((w, i) => <col key={i} style={{ width: w + 'px' }} />)}</colgroup>
                   <thead>
-                    <tr className="bg-slate-50 border-b border-slate-200">
-                      {ECOLS.map(h => <th key={h} className="px-3 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide">{h}</th>)}
+                    <tr className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+                      {ECOLS.map(h => <th key={h} className="px-3 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">{h}</th>)}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
                     {paged.length === 0
                       ? <tr><td colSpan={10} className="text-center py-12 text-slate-400 text-sm">No test cases in this plan</td></tr>
                       : paged.map(tc => (
@@ -329,7 +337,7 @@ export default function TestExecution({ testCases, testPlans, addToast }) {
       {/* ── Previously executed plans ── */}
       <div>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-base font-semibold text-slate-700">Previously Executed Plans</h2>
+          <h2 className="text-base font-semibold text-slate-700 dark:text-slate-200">Previously Executed Plans</h2>
           <button onClick={refreshHistory}
             className="text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-100">
             ↻ Refresh
@@ -347,24 +355,24 @@ export default function TestExecution({ testCases, testPlans, addToast }) {
             <p className="text-xs mt-1">Load a plan above and start setting execution statuses</p>
           </div>
         ) : (
-          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
             <div className="overflow-x-auto">
-              <table style={{ tableLayout: 'fixed', minWidth: '980px', width: '100%' }} className="text-sm">
+              <table style={{ tableLayout: 'fixed', minWidth: '1080px', width: '100%' }} className="text-sm">
                 <colgroup>
-                  {[110, 200, 100, 120, 110, 90, 90, 90, 90, 110].map((w, i) => <col key={i} style={{ width: w + 'px' }} />)}
+                  {[110, 200, 100, 120, 110, 90, 90, 90, 90, 90, 110].map((w, i) => <col key={i} style={{ width: w + 'px' }} />)}
                 </colgroup>
                 <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200">
-                    {['Plan ID','Summary','Sprint','Component','Fix Version','Executed','Pass','Fail','Rerun Pass','Last Executed']
-                      .map(h => <th key={h} className="px-3 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide">{h}</th>)}
+                  <tr className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+                    {['Plan ID','Summary','Sprint','Component','Fix Version','Executed','Pass','Fail','Rerun Pass','Rerun Fail','Last Executed']
+                      .map(h => <th key={h} className="px-3 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">{h}</th>)}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
                   {executedPlans.map(ep => {
                     const isActive = plan?.id === ep.id;
                     return (
                       <tr key={ep.id}
-                        className={`hover:bg-slate-50 cursor-pointer ${isActive ? 'bg-indigo-50/70' : ''}`}
+                        className={`hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer ${isActive ? 'bg-indigo-50/70 dark:bg-indigo-900/30' : ''}`}
                         onClick={() => { setPlanIn(ep.id); loadPlanById(ep.id); }}>
                         <td className="px-3 py-3">
                           <div className="flex items-center gap-2">
@@ -372,20 +380,20 @@ export default function TestExecution({ testCases, testPlans, addToast }) {
                             {isActive && <span className="px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded text-xs font-medium">Active</span>}
                           </div>
                         </td>
-                        <td className="px-3 py-3 text-slate-700 text-xs truncate" title={ep.summary}>{ep.summary || <span className="text-slate-300">—</span>}</td>
-                        <td className="px-3 py-3 text-slate-500 text-xs truncate">{ep.sprint || <span className="text-slate-300">—</span>}</td>
-                        <td className="px-3 py-3 text-slate-500 text-xs truncate">{ep.component || <span className="text-slate-300">—</span>}</td>
-                        <td className="px-3 py-3 text-slate-500 text-xs truncate">{ep.fixVersions || <span className="text-slate-300">—</span>}</td>
+                        <td className="px-3 py-3 text-slate-700 dark:text-slate-200 text-xs truncate" title={ep.summary}>{ep.summary || <span className="text-slate-300">—</span>}</td>
+                        <td className="px-3 py-3 text-slate-500 dark:text-slate-400 text-xs truncate">{ep.sprint      || <span className="text-slate-300">—</span>}</td>
+                        <td className="px-3 py-3 text-slate-500 dark:text-slate-400 text-xs truncate">{ep.component   || <span className="text-slate-300">—</span>}</td>
+                        <td className="px-3 py-3 text-slate-500 dark:text-slate-400 text-xs truncate">{ep.fixVersions || <span className="text-slate-300">—</span>}</td>
                         <td className="px-3 py-3">
-                          <span className="text-xs font-medium text-slate-700">
-                            {ep.s.total}
-                            <span className="text-slate-400 font-normal"> / {ep.s.tcCount}</span>
+                          <span className="text-xs font-medium text-slate-700 dark:text-slate-200">
+                            {ep.s.total}<span className="text-slate-400 dark:text-slate-400 font-normal"> / {ep.s.tcCount}</span>
                           </span>
                         </td>
                         <td className="px-3 py-3"><Pill value={ep.s.pass}      bg="#dcfce7" text="#166534" /></td>
                         <td className="px-3 py-3"><Pill value={ep.s.fail}      bg="#fee2e2" text="#991b1b" /></td>
                         <td className="px-3 py-3"><Pill value={ep.s.rerunPass} bg="#fef3c7" text="#92400e" /></td>
-                        <td className="px-3 py-3 text-slate-400 text-xs whitespace-nowrap">{fmtDate(ep.s.lastExecuted)}</td>
+                        <td className="px-3 py-3"><Pill value={ep.s.rerunFail} bg="#fecaca" text="#991b1b" /></td>
+                        <td className="px-3 py-3 text-slate-500 dark:text-slate-400 text-xs whitespace-nowrap">{fmtDate(ep.s.lastExecuted)}</td>
                       </tr>
                     );
                   })}
