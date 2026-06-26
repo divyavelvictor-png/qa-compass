@@ -216,18 +216,25 @@ export default function TestExecution({ testCases, testPlans, addToast }) {
     catch { addToast?.('Failed to update bug details.', 'error'); }
   }, [addToast]);
 
+  const totalBugs = useMemo(() =>
+    linked.reduce((sum, tc) => sum + (tc.bugDetails || []).length, 0),
+    [linked]
+  );
+
   const statCards = dark ? [
     { label: 'Total Executed', value: stats.total,     bg: '#1e293b', text: '#e2e8f0' },
     { label: 'Pass',           value: stats.pass,      bg: '#14532d', text: '#86efac' },
     { label: 'Fail',           value: stats.fail,      bg: '#7f1d1d', text: '#fca5a5' },
     { label: 'Rerun Pass',     value: stats.rerunPass, bg: '#78350f', text: '#fcd34d' },
     { label: 'Rerun Fail',     value: stats.rerunFail, bg: '#7c2d12', text: '#fdba74' },
+    { label: 'Total Bugs',     value: totalBugs,       bg: '#450a0a', text: '#fca5a5' },
   ] : [
     { label: 'Total Executed', value: stats.total,     bg: '#f1f5f9', text: '#1e293b' },
     { label: 'Pass',           value: stats.pass,      bg: '#dcfce7', text: '#166534' },
     { label: 'Fail',           value: stats.fail,      bg: '#fee2e2', text: '#991b1b' },
     { label: 'Rerun Pass',     value: stats.rerunPass, bg: '#fef3c7', text: '#92400e' },
     { label: 'Rerun Fail',     value: stats.rerunFail, bg: '#fecaca', text: '#991b1b' },
+    { label: 'Total Bugs',     value: totalBugs,       bg: '#fff1f2', text: '#9f1239' },
   ];
 
   const fmtDate = iso => {
@@ -293,7 +300,7 @@ export default function TestExecution({ testCases, testPlans, addToast }) {
           </div>
 
           {/* Execution stats */}
-          <div className="grid grid-cols-5 gap-3 mb-5">
+          <div className="grid grid-cols-6 gap-3 mb-5">
             {statCards.map(c => (
               <div key={c.label} style={{ backgroundColor: c.bg }}
                 className="rounded-xl px-4 py-3 flex flex-col items-center justify-center text-center border border-white/60">

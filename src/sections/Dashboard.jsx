@@ -51,6 +51,8 @@ export default function Dashboard({ testCases, testPlans, execRecords, lastRefre
   const legendFmt = v => <span style={{ color: dark ? '#cbd5e1' : '#475569', fontSize: 11 }}>{v}</span>;
   const [fTC, setFTC] = useState(''); const [fTT, setFTT] = useState(''); const [fTP, setFTP] = useState('');
   const [fEF, setFEF] = useState(''); const [fER, setFER] = useState(''); const [fES, setFES] = useState('');
+  const [pivotTab, setPivotTab] = useState('tc-component');
+  const [jiraQuery, setJiraQuery] = useState('');
 
   // ── Test Cases by Type ──────────────────────────────────
   const tcData = useMemo(() => {
@@ -143,6 +145,103 @@ export default function Dashboard({ testCases, testPlans, execRecords, lastRefre
     { l: 'Bugs Logged',         v: totalBugs,         icon: '🐛', c: 'text-red-600 dark:text-red-400'        },
     { l: 'TCs Not in Any Plan', v: tcNotInPlan,       icon: '🔗', c: 'text-orange-500 dark:text-orange-400'  },
   ];
+
+  // ── Pivot computations ─────────────────────────────────
+  const tcPivot = useMemo(() => {
+    const rowKeys = [...new Set(testCases.map(t => t.component || '(No Component)'))].sort();
+    const colKeys = [...TC_TYPES, 'Other'];
+    const data = {};
+    testCases.forEach(tc => {
+      const row = tc.component || '(No Component)';
+      const col = TC_TYPES.includes(tc.type) ? tc.type : 'Other';
+      if (!data[row]) data[row] = {};
+      data[row][col] = (data[row][col] || 0) + 1;
+    });
+    return { rowKeys, colKeys, data };
+  }, [testCases]);
+
+  const bugPivot = useMemo(() => {
+    const rowKeys = [...new Set(testCases.map(t => t.component || '(No Component)'))].sort();
+    const colKeys = [...TC_TYPES, 'Other'];
+    const data = {};
+    testCases.forEach(tc => {
+      const row = tc.component || '(No Component)';
+      const col = TC_TYPES.includes(tc.type) ? tc.type : 'Other';
+      const bugs = (tc.bugDetails || []).length;
+      if (!data[row]) data[row] = {};
+      data[row][col] = (data[row][col] || 0) + bugs;
+    });
+    return { rowKeys, colKeys, data };
+  }, [testCases]);
+
+  const sprintPivot = useMemo(() => {
+    const rowKeys = [...new Set(testPlans.map(p => p.sprint).filter(Boolean))].sort();
+    const colKeys = [...TC_TYPES, 'Other'];
+    const data = {};
+    testPlans.forEach(plan => {
+      if (!plan.sprint) return;
+      testCases.filter(tc => (plan.testCaseIds || []).includes(tc.id)).forEach(tc => {
+        const row = plan.sprint;
+        const col = TC_TYPES.includes(tc.type) ? tc.type : 'Other';
+        if (!data[row]) data[row] = {};
+        data[row][col] = (data[row][col] || 0) + 1;
+      });
+    });
+    return { rowKeys, colKeys, data };
+  }, [testPlans, testCases]);
+
+  const jiraResults = useMemo(() => {
+    const q = (jiraQuery || '').trim().toLowerCase();
+    if (!q) return [];
+    return testCases.filter(tc => (tc.jiraId || '').toLowerCase().includes(q));
+  }, [testCases, jiraQuery]);
+
+  const pivotTabs = [
+    { id: 'tc-component',  label: '📋 TCs by Component' },
+    { id: 'bug-component', label: '🐛 Bugs by Component' },
+    { id: 'tc-sprint',     label: '🏃 TCs by Sprint'     },
+    { id: 'jira',          label: '🔍 JIRA Lookup'       },
+  ];
+
+  const PivotTable = ({ pivot, valueLabel = 'Count' }) => {
+    const { rowKeys, colKeys, data } = pivot;
+    if (rowKeys.length === 0) return <p className="text-slate-400 dark:text-slate-500 text-sm text-center py-8">No data available</p>;
+    const rowTotal = row => colKeys.reduce((s, c) => s + (data[row]?.[c] || 0), 0);
+    const colTotal = col => rowKeys.reduce((s, r) => s + (data[r]?.[col] || 0), 0);
+    const grand    = rowKeys.reduce((s, r) => s + rowTotal(r), 0);
+    return (
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs border-collapse">
+          <thead>
+            <tr className="bg-slate-50 dark:bg-slate-800">
+              <th className="px-3 py-2 text-left font-semibold text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 min-w-[140px]">Component</th>
+              {colKeys.map(c => <th key={c} className="px-3 py-2 text-center font-semibold text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 min-w-[80px]">{c}</th>)}
+              <th className="px-3 py-2 text-center font-semibold text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-700">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rowKeys.map(row => (
+              <tr key={row} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                <td className="px-3 py-2 text-slate-800 dark:text-slate-100 font-medium border border-slate-200 dark:border-slate-700">{row}</td>
+                {colKeys.map(col => {
+                  const v = data[row]?.[col] || 0;
+                  return <td key={col} className={`px-3 py-2 text-center border border-slate-200 dark:border-slate-700 ${v > 0 ? 'text-slate-800 dark:text-slate-100 font-medium' : 'text-slate-300 dark:text-slate-600'}`}>{v || '—'}</td>;
+                })}
+                <td className="px-3 py-2 text-center font-bold text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">{rowTotal(row)}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="bg-slate-100 dark:bg-slate-700">
+              <td className="px-3 py-2 font-bold text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700">Total</td>
+              {colKeys.map(col => <td key={col} className="px-3 py-2 text-center font-bold text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700">{colTotal(col) || '—'}</td>)}
+              <td className="px-3 py-2 text-center font-bold text-indigo-600 dark:text-indigo-400 border border-slate-200 dark:border-slate-700">{grand}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    );
+  };
 
   return (
     <div className="p-6 dark:text-slate-100">
@@ -307,6 +406,95 @@ export default function Dashboard({ testCases, testPlans, execRecords, lastRefre
               </table>
             </div>
           )}
+      </div>
+
+      {/* ── Pivot Analysis ── */}
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden mt-6">
+        <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-700">
+          <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Pivot Analysis</h2>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Cross-dimensional view of test cases, bugs, sprints and JIRA IDs</p>
+          <div className="flex flex-wrap gap-1 mt-3">
+            {pivotTabs.map(t => (
+              <button key={t.id} onClick={() => setPivotTab(t.id)}
+                className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors ${
+                  pivotTab === t.id
+                    ? 'bg-indigo-600 text-white'
+                    : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="p-5">
+          {pivotTab === 'tc-component' && (
+            <>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Number of test cases per component, broken down by test case type</p>
+              <PivotTable pivot={tcPivot} />
+            </>
+          )}
+          {pivotTab === 'bug-component' && (
+            <>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Number of bugs raised per component, broken down by test case type</p>
+              <PivotTable pivot={bugPivot} valueLabel="Bugs" />
+            </>
+          )}
+          {pivotTab === 'tc-sprint' && (
+            <>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Number of test cases executed per sprint, broken down by type</p>
+              {sprintPivot.rowKeys.length === 0
+                ? <p className="text-slate-400 dark:text-slate-500 text-sm text-center py-8">No sprint data — add sprints to your test plans</p>
+                : <PivotTable pivot={sprintPivot} />}
+            </>
+          )}
+          {pivotTab === 'jira' && (
+            <div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Search by JIRA ID to see all linked test cases and their bugs</p>
+              <input
+                value={jiraQuery} onChange={e => setJiraQuery(e.target.value)}
+                placeholder="Enter JIRA ID (e.g. PROJ-123)…"
+                className="w-full max-w-sm px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500 mb-4" />
+              {jiraQuery && jiraResults.length === 0 && (
+                <p className="text-slate-400 dark:text-slate-500 text-sm text-center py-8">No test cases found for "{jiraQuery}"</p>
+              )}
+              {jiraResults.length > 0 && (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 dark:bg-slate-800">
+                        {['TC ID','Summary','JIRA ID','Component','Type','Priority','Bugs'].map(h => (
+                          <th key={h} className="px-3 py-2 text-left font-semibold text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {jiraResults.map(tc => (
+                        <tr key={tc.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                          <td className="px-3 py-2 font-mono text-indigo-600 dark:text-indigo-400 font-semibold border border-slate-200 dark:border-slate-700">{tc.id}</td>
+                          <td className="px-3 py-2 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 max-w-xs truncate" title={tc.summary}>{tc.summary}</td>
+                          <td className="px-3 py-2 text-slate-800 dark:text-slate-100 font-medium border border-slate-200 dark:border-slate-700">{tc.jiraId}</td>
+                          <td className="px-3 py-2 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700">{tc.component || '—'}</td>
+                          <td className="px-3 py-2 border border-slate-200 dark:border-slate-700">{tc.type && <span className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded text-xs">{tc.type}</span>}</td>
+                          <td className="px-3 py-2 border border-slate-200 dark:border-slate-700">{tc.priority || '—'}</td>
+                          <td className="px-3 py-2 border border-slate-200 dark:border-slate-700">
+                            {(tc.bugDetails || []).length === 0
+                              ? <span className="text-slate-300 dark:text-slate-600">—</span>
+                              : <div className="flex flex-wrap gap-1">
+                                  {(tc.bugDetails || []).map((b, i) => (
+                                    <span key={i} className="px-1.5 py-0.5 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 rounded text-xs">{b}</span>
+                                  ))}
+                                </div>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <p className="text-xs text-slate-400 dark:text-slate-500 mt-2">{jiraResults.length} test case{jiraResults.length !== 1 ? 's' : ''} found</p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

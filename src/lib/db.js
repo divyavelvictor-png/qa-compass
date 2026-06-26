@@ -18,6 +18,7 @@ const normTC = f => ({
   priority:         norm(f.priority,  PRIORITIES),
   prerequisite:     trim(f.prerequisite),
   actions:          trim(f.actions),
+  test_data:        trim(f.testData || f.test_data || ''),
   expected_results: trim(f.expectedResults || f.expected_results),
   actual_results:   trim(f.actualResults   || f.actual_results),
   type:             norm(f.type, TC_TYPES),
@@ -46,10 +47,10 @@ const normTP = f => ({
 export const tcFromDb = r => ({
   id: r.id, summary: r.summary, priority: r.priority || '',
   prerequisite: r.prerequisite || '', actions: r.actions || '',
+  testData: r.test_data || '',
   expectedResults: r.expected_results || '', actualResults: r.actual_results || '',
   type: r.type || '', jiraId: r.jira_id || '',
   component: r.component || '', tags: r.tags || [],
-  // bug_details is TEXT[] in DB; handle legacy TEXT values gracefully
   bugDetails: Array.isArray(r.bug_details)
     ? r.bug_details
     : (r.bug_details ? [r.bug_details] : []),
@@ -103,17 +104,22 @@ export async function dbBulkCreateTCs(rows) {
       priority:        row['Priority']             || row['priority']             || '',
       prerequisite:    row['Pre-Requisite']        || row['Pre-requisite']        || row['Prerequisite'] || row['prerequisite'] || '',
       actions:         row['Actions']              || row['actions']              || '',
+      testData:        row['Data (Optional)']      || row['Data']                 || row['data']         || '',
       expectedResults: row['Expected Results']     || row['expected results']     || '',
       actualResults:   row['Actual Results']       || row['actual results']       || '',
       type:            row['Test Case Type']       || row['test case type']       || '',
-      jiraId:          row['JIRA ID (Optional)']   || row['JIRA ID']              || row['jira id']  || '',
+      jiraId:          row['JIRA ID (Optional)']   || row['JIRA ID']              || row['jira id']      || '',
       component:       row['Component']            || row['component']            || '',
       bugDetails:      (() => {
         const v = row['Bug Details (Optional)'] || row['Bug Details'] || row['bug details'] || '';
         return v ? [v.toString().trim()] : [];
       })(),
-      tags:            (row['Tags (Optional)'] || row['Tags'] || row['tags'] || '')
-                         .toString().split(',').map(t => t.trim()).filter(Boolean),
+      // Robust tag lookup — matches any column key containing 'tag'
+      tags: (() => {
+        const key = Object.keys(row).find(k => k.toLowerCase().replace(/[^a-z]/g, '').includes('tag'));
+        const v = key ? row[key] : '';
+        return v.toString().split(',').map(t => t.trim()).filter(Boolean);
+      })(),
     };
     const n = normTC(raw);
     return { id: `TC-${String(start + i).padStart(4, '0')}`, ...n };

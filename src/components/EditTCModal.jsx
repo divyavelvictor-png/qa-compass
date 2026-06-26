@@ -10,6 +10,7 @@ export default function EditTCModal({ tc, onClose, onSaved, addToast }) {
     priority:        tc.priority        || '',
     prerequisite:    tc.prerequisite    || '',
     actions:         tc.actions         || '',
+    testData:        tc.testData        || '',
     expectedResults: tc.expectedResults || '',
     actualResults:   tc.actualResults   || '',
     type:            tc.type            || '',
@@ -82,21 +83,18 @@ export default function EditTCModal({ tc, onClose, onSaved, addToast }) {
       </Fld>
 
       <Fld label="Actions">
-        <Txa
-          value={f.actions}
-          onChange={upd('actions')}
-          placeholder="Step-by-step actions to execute the test"
-          rows={5}
-        />
+        <Txa value={f.actions} onChange={upd('actions')}
+          placeholder="Step-by-step actions to execute the test" rows={5} />
+      </Fld>
+
+      <Fld label="Data">
+        <Txa value={f.testData} onChange={upd('testData')}
+          placeholder="Optional — test input data or parameters" rows={2} />
       </Fld>
 
       <Fld label="Expected Results">
-        <Txa
-          value={f.expectedResults}
-          onChange={upd('expectedResults')}
-          placeholder="Expected outcome after executing the actions"
-          rows={5}
-        />
+        <Txa value={f.expectedResults} onChange={upd('expectedResults')}
+          placeholder="Expected outcome after executing the actions" rows={5} />
       </Fld>
 
       <Fld label="Actual Results">

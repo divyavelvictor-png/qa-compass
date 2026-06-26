@@ -6,7 +6,7 @@ import { PRIORITIES, TC_TYPES } from '../lib/constants';
 
 export default function CreateTCModal({ onClose, onCreated, addToast, previewId }) {
   const [f, setF] = useState({
-    summary: '', priority: '', prerequisite: '', actions: '',
+    summary: '', priority: '', prerequisite: '', actions: '', testData: '',
     expectedResults: '', actualResults: '', type: '',
     jiraId: '', component: '', tags: [], bugDetails: [],
   });
@@ -53,6 +53,9 @@ export default function CreateTCModal({ onClose, onCreated, addToast, previewId 
       </Fld>
       <Fld label="Actions">
         <Txa value={f.actions} onChange={upd('actions')} />
+      </Fld>
+      <Fld label="Data">
+        <Txa value={f.testData} onChange={upd('testData')} placeholder="Optional — test input data or parameters" rows={2} />
       </Fld>
       <Fld label="Expected Results">
         <Txa value={f.expectedResults} onChange={upd('expectedResults')} />

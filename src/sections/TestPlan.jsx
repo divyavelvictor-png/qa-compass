@@ -4,6 +4,7 @@ import { dbCreateTP, dbUpdateTP, dbUpdateTPIds, dbDeleteTPs, dbGetNextTPId, dbUp
 import { useTableState } from '../lib/useTableState';
 import { ResizableTh } from '../components/ResizableTh';
 import { BugList } from '../components/BugList';
+import { MultiSelect, matchMulti, NONE_VAL } from '../components/MultiSelect';
 import { Btn, SH, Pagination, Modal, Fld, Inp, Txa, Sel, ChipInput } from '../components/ui';
 import CreateTCModal from '../components/CreateTCModal';
 import TCPickerModal  from '../components/TCPickerModal';
@@ -355,7 +356,9 @@ export default function TestPlan({ testCases, testPlans, loadData, addToast }) {
   const [sel, setSel]       = useState(null);
   const [srch, setSrch]     = useState('');
   const [ds, setDs]         = useState('');
-  const [fC, setFC] = useState(''); const [fL, setFL] = useState('');
+  const [fC, setFC] = useState([]);
+  const [fL, setFL] = useState([]);
+  const [fS, setFS] = useState([]);
   const [sortCol, setSortCol] = useState('id');
   const [sortDir, setSortDir] = useState('asc');
   const [page, setPage]     = useState(1);
@@ -396,23 +399,40 @@ export default function TestPlan({ testCases, testPlans, loadData, addToast }) {
     dbRef.current = setTimeout(() => setDs(srch), 300);
     return () => clearTimeout(dbRef.current);
   }, [srch]);
-  useEffect(() => setPage(1), [ds, fC, fL]);
-  useEffect(() => setSelectedIds(new Set()), [ds, fC, fL]);
+  useEffect(() => setPage(1), [ds, fC, fL, fS]);
+  useEffect(() => { setSelectedIds(new Set()); }, [ds, fC, fL, fS]);
 
   const comps  = useMemo(() => [...new Set(testPlans.map(p => p.component).filter(Boolean))].sort(), [testPlans]);
   const labels = useMemo(() => [...new Set(testPlans.flatMap(p => p.labels || []))].sort(), [testPlans]);
 
+  // Sprints available based on selected components (if none selected, show all)
+  const availableSprints = useMemo(() => {
+    const base = fC.length > 0
+      ? testPlans.filter(p => matchMulti(p.component, fC))
+      : testPlans;
+    return [...new Set(base.map(p => p.sprint).filter(Boolean))].sort();
+  }, [testPlans, fC]);
+
+  const hasTPFilters = ds || fC.length > 0 || fL.length > 0 || fS.length > 0;
+  const resetTPFilters = () => { setSrch(''); setFC([]); setFL([]); setFS([]); };
+
   const filtered = useMemo(() => {
     let d = [...testPlans];
     if (ds) { const q = ds.toLowerCase(); d = d.filter(p => (p.id || '').toLowerCase().includes(q) || (p.summary || '').toLowerCase().includes(q)); }
-    if (fC) d = d.filter(p => p.component === fC);
-    if (fL) d = d.filter(p => (p.labels || []).includes(fL));
+    if (fC.length > 0) d = d.filter(p => matchMulti(p.component, fC));
+    if (fL.length > 0) d = d.filter(p => {
+      const arr = p.labels || [];
+      if (fL.includes(NONE_VAL) && arr.length === 0) return true;
+      const others = fL.filter(v => v !== NONE_VAL);
+      return others.length > 0 && others.some(l => arr.includes(l));
+    });
+    if (fS.length > 0) d = d.filter(p => matchMulti(p.sprint, fS));
     d.sort((a, b) => {
       const dir = sortDir === 'asc' ? 1 : -1;
       return (a[sortCol] || '') < (b[sortCol] || '') ? -dir : (a[sortCol] || '') > (b[sortCol] || '') ? dir : 0;
     });
     return d;
-  }, [testPlans, ds, fC, fL, sortCol, sortDir]);
+  }, [testPlans, ds, fC, fL, fS, sortCol, sortDir]);
 
   const paged = useMemo(() => filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE), [filtered, page]);
   const sort  = col => { setSortDir(d => sortCol === col ? (d === 'asc' ? 'desc' : 'asc') : 'asc'); setSortCol(col); };
@@ -496,12 +516,15 @@ export default function TestPlan({ testCases, testPlans, loadData, addToast }) {
       <div className="flex flex-wrap gap-2 mb-3">
         <input value={srch} onChange={e => setSrch(e.target.value)} placeholder="Search plan ID or summary…"
           className="px-3 py-2 border border-slate-200 rounded-lg text-sm w-64 focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-100 dark:placeholder:text-slate-500" />
-        <select value={fC} onChange={e => setFC(e.target.value)} className="px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100">
-          <option value="">All Components</option>{comps.map(c => <option key={c}>{c}</option>)}
-        </select>
-        <select value={fL} onChange={e => setFL(e.target.value)} className="px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100">
-          <option value="">All Labels</option>{labels.map(l => <option key={l}>{l}</option>)}
-        </select>
+        <MultiSelect options={comps}            selected={fC} onChange={setFC} placeholder="Components" noneLabel="No Components" className="w-40" />
+        <MultiSelect options={labels}           selected={fL} onChange={setFL} placeholder="Labels"     noneLabel="No Labels"     className="w-36" />
+        <MultiSelect options={availableSprints} selected={fS} onChange={setFS} placeholder="Sprint"    noneLabel="No Sprint"     className="w-36" />
+        {hasTPFilters && (
+          <button onClick={resetTPFilters}
+            className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-1">
+            ↺ Reset
+          </button>
+        )}
       </div>
 
       {/* Selection action bar */}
