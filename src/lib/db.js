@@ -237,11 +237,37 @@ export async function dbGetAllExec() {
 }
 
 export async function dbGetAllExecGrouped() {
-  const { data, error } = await supabase.from('execution_records').select('*');
-  if (error) throw error;
+  // Fetch execution records AND test plans together so we can
+  // filter out orphaned records (TCs that were unlinked from a plan)
+  const [execRes, planRes] = await Promise.all([
+    supabase.from('execution_records').select('*'),
+    supabase.from('test_plans').select('id, test_case_ids'),
+  ]);
+  if (execRes.error) throw execRes.error;
+  if (planRes.error) throw planRes.error;
+
+  // Map planId → Set of currently linked TC IDs + total TC count
+  const planMeta = {};
+  (planRes.data || []).forEach(p => {
+    planMeta[p.id] = {
+      linkedSet: new Set(p.test_case_ids || []),
+      tcCount:   (p.test_case_ids || []).length,
+    };
+  });
+
   const grouped = {};
-  (data || []).forEach(r => {
-    if (!grouped[r.plan_id]) grouped[r.plan_id] = { tcIds: new Set(), total: 0, pass: 0, fail: 0, rerunPass: 0, rerunFail: 0, lastExecuted: null };
+  (execRes.data || []).forEach(r => {
+    const meta = planMeta[r.plan_id];
+    // Skip if plan doesn't exist or this TC is no longer linked to the plan
+    if (!meta || !meta.linkedSet.has(r.tc_id)) return;
+
+    if (!grouped[r.plan_id]) {
+      grouped[r.plan_id] = {
+        tcIds: new Set(), total: 0, pass: 0, fail: 0,
+        rerunPass: 0, rerunFail: 0, lastExecuted: null,
+        tcCount: meta.tcCount,  // total linked TCs (denominator)
+      };
+    }
     const g = grouped[r.plan_id];
     g.tcIds.add(r.tc_id);
     if (r.status) {
@@ -254,7 +280,8 @@ export async function dbGetAllExecGrouped() {
     if (r.executed_on && (!g.lastExecuted || r.executed_on > g.lastExecuted))
       g.lastExecuted = r.executed_on;
   });
-  Object.values(grouped).forEach(g => { g.tcCount = g.tcIds.size; delete g.tcIds; });
+
+  Object.values(grouped).forEach(g => { delete g.tcIds; });
   return grouped;
 }
 
