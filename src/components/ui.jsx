@@ -27,8 +27,8 @@ export function ChipInput({ chips, onChange, placeholder = 'Add tag…' }) {
   const ref = useRef(null);
 
   const add = v => {
-    const t = v.trim().replace(/,+$/, '');
-    if (t && !chips.includes(t)) onChange([...chips, t]);
+    const t = v.trim().toLowerCase().replace(/,+$/, '');
+    if (t && !chips.some(c => c.toLowerCase() === t)) onChange([...chips, t]);
     setVal('');
   };
 

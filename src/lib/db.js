@@ -24,7 +24,12 @@ const normTC = f => ({
   type:             norm(f.type, TC_TYPES),
   jira_id:          trim(f.jiraId || f.jira_id).toUpperCase().replace(/\s+/g, '') || '',
   component:        cap(f.component),
-  tags:             (f.tags || []).map(t => trim(t)).filter(Boolean),
+  tags: (() => {
+    const seen = new Set();
+    return (f.tags || [])
+      .map(t => trim(t).toLowerCase())
+      .filter(t => t && !seen.has(t) && seen.add(t));
+  })(),
   bug_details:      (() => {
     const v = f.bugDetails ?? f.bug_details ?? [];
     if (Array.isArray(v)) return v.map(b => trim(b.toString())).filter(Boolean);
@@ -131,7 +136,10 @@ export async function dbBulkCreateTCs(rows) {
 }
 
 export async function dbUpdateTCTags(id, tags) {
-  const cleaned = (tags || []).map(t => trim(t)).filter(Boolean);
+  const seen = new Set();
+  const cleaned = (tags || [])
+    .map(t => t.toString().trim().toLowerCase())
+    .filter(t => t && !seen.has(t) && seen.add(t));
   const { error } = await supabase.from('test_cases').update({ tags: cleaned }).eq('id', id);
   if (error) throw error;
 }

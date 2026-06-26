@@ -31,22 +31,22 @@ export default function TagCell({ id, tags = [], onSave }) {
   }, []);
 
   const add = () => {
-    const v = newVal.trim();
+    const v = newVal.trim().toLowerCase();   // normalise to lowercase
     if (!v) return;
-    if (!items.includes(v)) setItems(p => [...p, v]);
+    // Case-insensitive duplicate check
+    if (!items.some(t => t.toLowerCase() === v)) setItems(p => [...p, v]);
     setNewVal('');
   };
 
   const remove = tag => setItems(p => p.filter(t => t !== tag));
 
   const save = () => {
-    // Auto-add anything still typed in the input field
+    // Auto-add anything still typed in the input field (normalised to lowercase)
     let final = items;
-    const pending = newVal.trim();
-    if (pending && !items.includes(pending)) {
+    const pending = newVal.trim().toLowerCase();
+    if (pending && !items.some(t => t.toLowerCase() === pending)) {
       final = [...items, pending];
     }
-    // Optimistic update — show new tags immediately without waiting for loadData
     setItems(final);
     onSave(id, final);
     setOpen(false);
