@@ -136,9 +136,12 @@ export default function TestExecution({ testCases, testPlans, addToast }) {
   );
   const paged = useMemo(() => linked.slice((page - 1) * PER_PAGE, page * PER_PAGE), [linked, page]);
 
-  // Stats for the currently loaded plan
+  // Stats for the currently loaded plan — only count linked test cases
   const stats = useMemo(() => {
-    const recs = Object.values(execData);
+    const linkedIds = new Set(linked.map(tc => tc.id));
+    // Only include execution records that belong to currently linked TCs
+    // (unlinked TCs may still have orphan records in execution_records)
+    const recs = Object.values(execData).filter(e => linkedIds.has(e.tcId));
     return {
       total:     recs.filter(e => e.status).length,
       pass:      recs.filter(e => e.status === 'Pass').length,
@@ -146,7 +149,7 @@ export default function TestExecution({ testCases, testPlans, addToast }) {
       rerunPass: recs.filter(e => e.status === 'Rerun - Pass').length,
       rerunFail: recs.filter(e => e.status === 'Rerun - Fail').length,
     };
-  }, [execData]);
+  }, [execData, linked]);
 
   // Previously executed plans list — sorted newest ID first
   const executedPlans = useMemo(() => {

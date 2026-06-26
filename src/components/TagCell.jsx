@@ -1,29 +1,34 @@
 import { useState, useRef, useEffect } from 'react';
 
-/**
- * TagCell — shows tags inline in a table cell.
- * Clicking opens an absolute-positioned edit overlay so the table
- * layout is never disturbed regardless of column width.
- */
 export default function TagCell({ id, tags = [], onSave }) {
   const [open, setOpen]   = useState(false);
   const [items, setItems] = useState(tags);
   const [newVal, setNewVal] = useState('');
   const ref = useRef(null);
 
-  // Sync when parent pushes new tags (e.g. after realtime update)
-  useEffect(() => { if (!open) setItems(tags); }, [JSON.stringify(tags), open]);
+  // Sync only when external tags change (realtime from other users).
+  // Intentionally excludes `open` from deps — if `open` were included,
+  // closing the overlay after save would reset items to the stale prop
+  // before loadData() brings back the fresh value.
+  useEffect(() => {
+    if (!open) setItems(tags);
+  }, [JSON.stringify(tags)]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Refresh items to latest when panel opens
+  useEffect(() => {
+    if (open) setItems(tags);
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Close on outside click
   useEffect(() => {
     const h = e => {
       if (ref.current && !ref.current.contains(e.target)) {
-        setOpen(false); setNewVal(''); setItems(tags);
+        setOpen(false); setNewVal('');
       }
     };
     document.addEventListener('mousedown', h);
     return () => document.removeEventListener('mousedown', h);
-  }, [tags]);
+  }, []);
 
   const add = () => {
     const v = newVal.trim();
@@ -34,13 +39,26 @@ export default function TagCell({ id, tags = [], onSave }) {
 
   const remove = tag => setItems(p => p.filter(t => t !== tag));
 
-  const save = () => { onSave(id, items); setOpen(false); setNewVal(''); };
+  const save = () => {
+    // Auto-add anything still typed in the input field
+    let final = items;
+    const pending = newVal.trim();
+    if (pending && !items.includes(pending)) {
+      final = [...items, pending];
+    }
+    // Optimistic update — show new tags immediately without waiting for loadData
+    setItems(final);
+    onSave(id, final);
+    setOpen(false);
+    setNewVal('');
+  };
+
   const cancel = () => { setItems(tags); setOpen(false); setNewVal(''); };
 
   return (
     <div ref={ref} className="relative">
 
-      {/* ── Inline display — never changes height ── */}
+      {/* Inline display — never affects row height */}
       <div
         onClick={() => setOpen(true)}
         className="flex flex-wrap gap-1 cursor-pointer min-h-[22px] group"
@@ -56,11 +74,11 @@ export default function TagCell({ id, tags = [], onSave }) {
             ))}
       </div>
 
-      {/* ── Floating edit panel — absolute, doesn't affect table ── */}
+      {/* Floating edit panel */}
       {open && (
         <div className="absolute z-50 left-0 top-full mt-1 w-60 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl p-3">
 
-          {/* Current tags */}
+          {/* Current tag chips */}
           <div className="flex flex-wrap gap-1.5 mb-3 min-h-[24px]">
             {items.length === 0
               ? <span className="text-xs text-slate-400 dark:text-slate-500 italic">No tags yet</span>
@@ -82,7 +100,10 @@ export default function TagCell({ id, tags = [], onSave }) {
               autoFocus
               value={newVal}
               onChange={e => setNewVal(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(); } if (e.key === 'Escape') cancel(); }}
+              onKeyDown={e => {
+                if (e.key === 'Enter') { e.preventDefault(); add(); }
+                if (e.key === 'Escape') cancel();
+              }}
               placeholder="Add tag…"
               className="flex-1 px-2 py-1 text-xs border border-slate-200 dark:border-slate-600 rounded-lg outline-none focus:ring-1 focus:ring-indigo-400 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
             />
